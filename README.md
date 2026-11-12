@@ -37,7 +37,7 @@ Additional game editors may be introduced in future releases.
 
 # **Fallout Shelter Editor**
 
-# **Fallout Shelter is the first fully supported game editor in SAVEFORGE.**
+**Fallout Shelter is the first fully supported game editor in SAVEFORGE.**
 
 Current editing modules include:
 
