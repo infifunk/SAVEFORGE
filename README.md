@@ -1,4 +1,4 @@
-SAVEFORGE — Cyber Forge
+# **SAVEFORGE — Cyber Forge**
 
 A multi-game save editor for iOS and iPadOS.
 
@@ -6,12 +6,13 @@ SAVEFORGE is a native SwiftUI application designed to give players more control 
 
 Current release: v1.0
 Platform: iOS / iPadOS
+Targeted Version: 16.0+
 Development: SwiftUI
 Status: Fallout Shelter Editor Ready — Additional game editors coming soon.
 
 ⸻
 
-Features
+# **Features**
 
 * Multi-game library — Browse supported and upcoming game editors from one interface.
 * Save importing — Import compatible game save files into SAVEFORGE.
@@ -21,15 +22,16 @@ Features
 * Library management — Access recent files, favorites, imported files, and storage tools.
 * Cyber Forge interface — A dark interface with gold and cyan accents, custom game artwork, and a modern design.
 
-Supported Games
+## **Supported Games**
 
-Game	Editor Status
-Fallout Shelter	Editor Ready
-Stardew Valley	Coming Soon
-Terraria	Coming Soon
-Minecraft Bedrock	Coming Soon
-TheoTown	Coming Soon
-WorldBox	Coming Soon
+| **Game** | **Editor Status** |
+|----------|----------------|
+| Fallout Shelter | Editor Ready |
+| Stardew Valley | Coming Soon |
+| Terraria | Coming Soon |
+| Minecraft Bedrock | Coming Soon |
+| TheoTown | Coming Soon |
+| WorldBox | Coming Soon |
 
 Additional game editors may be introduced in future releases.
 
@@ -45,16 +47,19 @@ Current editing modules include:
 * Inventory — Manage weapons, outfits, pets, junk, and other inventory items.
 * Rooms — Access and edit supported room and vault layout data.
 
-Fallout Shelter Save Access
+# **Fallout Shelter Save Access**
 
 SAVEFORGE supports different save-access workflows depending on the device:
 
 * Jailbroken devices: Direct access to Fallout Shelter save files through the device filesystem.
 * Non-jailbroken devices: WQFiles running inside LiveContainer (LC) is required for the Fallout Shelter save-access workflow.
+* Steam (MacOS/Linux/Windows): **Windows:** C:\Users\<YourName>\AppData\Local; **Linux:** You have two ways, try ~/.steam/steam/steamapps/common/Fallout Shelter, or find ~/.steam/steam/steamapps/common -type d -iname "Fallout Shelter"; **MacOS:** ~/Library/Application Support/Fallout Shelter
+
+* Make sure you disable Cloud Sync inside Steam before you grab your Vault(1,2,3).sav files
 
 Save compatibility depends on the game version, save format, and device environment. Always keep a backup of your original save before editing.
 
-Interface
+# **Interface**
 
 SAVEFORGE uses the Cyber Forge visual identity:
 
@@ -64,12 +69,14 @@ SAVEFORGE uses the Cyber Forge visual identity:
 * Dedicated game editor screens.
 * Native iOS and iPadOS interface elements.
 
-Project Structure
+# **Project Structure**
 
 The project includes:
 
 SAVEFORGE/
 ├── SAVEFORGEApp.swift
+├── README.md
+├── LICENSE
 ├── ContentView.swift
 ├── Config/
 │   ├── Project.plist
@@ -85,7 +92,7 @@ SAVEFORGE/
     ├── worldbox.svg
     └── Game JSON files
 
-Development
+# **Development**
 
 SAVEFORGE is developed using:
 
@@ -96,7 +103,7 @@ SAVEFORGE is developed using:
 
 The project is developed and built using Nyxian IDE.
 
-Roadmap
+# **Roadmap**
 
 Planned improvements and future features include:
 
@@ -115,15 +122,15 @@ Always create a backup of your original game save before making modifications.
 
 SAVEFORGE is provided as a save-editing utility. Users are responsible for maintaining their own backups and verifying edited saves before replacing original files.
 
-Disclaimer
+**Disclaimer**
 
 SAVEFORGE is an independent, fan-made project and is not affiliated with, endorsed by, or sponsored by Bethesda Softworks or Microsoft.
 
 All game names, trademarks, and third-party assets belong to their respective owners.
 
-License
+# **License**
 
-SAVEFORGE is intended to be distributed under the MIT License.
+SAVEFORGE — Cyber Forge is proprietary software.
 
 See the LICENSE file for the full license terms.
 
