@@ -73,6 +73,7 @@ SAVEFORGE uses the Cyber Forge visual identity:
 
 The project includes:
 
+```
 SAVEFORGE/
 ├── SAVEFORGEApp.swift
 ├── README.md
@@ -91,6 +92,7 @@ SAVEFORGE/
     ├── theotown.svg
     ├── worldbox.svg
     └── Game JSON files
+```
 
 # **Development**
 
