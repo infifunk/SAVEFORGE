@@ -1,7 +1,10 @@
 //
 // ContentView.swift
 // SAVEFORGE — Cyber Forge
-// v0.1.0
+// v0.1.2
+//
+// Nyxian-safe UI foundation.
+// No SwiftUI state or environment property wrappers.
 //
 
 import SwiftUI
@@ -92,7 +95,7 @@ private struct LibraryScreen: View {
 
                         HStack(spacing: 7) {
                             Image(systemName: "lock.shield")
-                            Text("LOCAL-FIRST • YOUR FILES STAY ON YOUR DEVICE • v0.1.0")
+                            Text("LOCAL-FIRST • YOUR FILES STAY ON YOUR DEVICE • v0.1.2")
                         }
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .tracking(0.5)
@@ -705,130 +708,146 @@ private enum StoredVaultSaveLoader {
     }
 }
 
-// MARK: - Import screen / document picker
+// MARK: - Import screen / UIKit document picker
 
 private struct SaveImportScreen: View {
     var body: some View {
-        ZStack {
-            SF.background.ignoresSafeArea()
-            VStack(spacing: 12) {
-                ProgressView().tint(SF.gold)
-                Text("OPENING FILES…")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .tracking(1.2)
-                    .foregroundStyle(SF.gold)
+        ImportPickerControllerHost()
+            .background(SF.background.ignoresSafeArea())
+            .overlay {
+                VStack(spacing: 12) {
+                    ProgressView().tint(SF.gold)
+                    Text("OPENING FILES…")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(1.2)
+                        .foregroundStyle(SF.gold)
+                    Text("SELECT A GAME SAVE TO IMPORT")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundStyle(SF.muted)
+                }
+                .allowsHitTesting(false)
             }
-        }
-        .background(ImportPickerPresenter())
-        .navigationTitle("Import Save")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarColorScheme(.dark, for: .navigationBar)
+            .navigationTitle("Import Save")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
     }
 }
 
-// Present the system picker from a real UIKit controller. A UIDocumentPickerViewController
-// must be presented modally; embedding it as the representable's root view makes it look
-// like an inert SAVEFORGE page in some SwiftUI/App Runner hosts.
-private struct ImportPickerPresenter: UIViewControllerRepresentable {
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeUIViewController(context: Context) -> ImportPickerHostController {
-        let host = ImportPickerHostController()
-        host.pickerDelegate = context.coordinator
-        return host
+private struct ImportPickerControllerHost: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> ImportPickerViewController {
+        ImportPickerViewController()
     }
 
-    func updateUIViewController(_ controller: ImportPickerHostController, context: Context) {
-        controller.pickerDelegate = context.coordinator
-    }
-
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            guard let url = urls.first else { return }
-            let access = url.startAccessingSecurityScopedResource()
-            defer { if access { url.stopAccessingSecurityScopedResource() } }
-
-            do {
-                let data = try Data(contentsOf: url)
-                let detected = try SaveEngineDetector.detect(data: data, filename: url.lastPathComponent)
-
-                switch detected {
-                case .falloutShelter(let decoded):
-                    let store = FSSEStore.shared
-                    store.save = decoded
-                    store.originalFileName = url.lastPathComponent
-                    do {
-                        try AppFileStore.importFile(url)
-                        returnToLibrary(from: controller)
-                    } catch {
-                        presentResult(from: controller,
-                                      title: "Save Imported — Backup Failed",
-                                      message: "The save was loaded successfully, but SAVEFORGE could not create the backup in Settings > Imported Files.\n\n\(error.localizedDescription)",
-                                      returnToLibraryWhenClosed: true)
-                    }
-                case .recognizedButUnavailable(let gameName):
-                    presentResult(from: controller,
-                                  title: "\(gameName) Detected",
-                                  message: "SAVEFORGE recognized this save format, but its editing engine is not available yet. Your file was not modified or imported into another engine.")
-                case .unknown:
-                    presentResult(from: controller,
-                                  title: "Save Format Not Recognized",
-                                  message: "SAVEFORGE could not identify this file as a supported game save. Nothing was changed and no backup was added. Open the relevant game page to check its supported save format.")
-                }
-            } catch {
-                presentResult(from: controller, title: "Import Failed", message: error.localizedDescription)
-            }
-        }
-
-        private func presentResult(from controller: UIViewController,
-                                   title: String,
-                                   message: String,
-                                   returnToLibraryWhenClosed: Bool = false) {
-            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
-                if returnToLibraryWhenClosed {
-                    self.returnToLibrary(from: controller)
-                }
-            })
-            controller.present(alert, animated: true)
-        }
-
-        // The main Library import is a staging flow: once the file is safely copied
-        // into Imported Files, leave the temporary “OPENING FILES…” route and return
-        // to the app's main Library screen. The Fallout Shelter page can load it later.
-        private func returnToLibrary(from picker: UIViewController) {
-            guard let presenter = picker.presentingViewController else { return }
-            picker.dismiss(animated: true) {
-                if let navigationController = presenter.navigationController {
-                    navigationController.popViewController(animated: true)
-                } else {
-                    presenter.dismiss(animated: true)
-                }
-            }
-        }
-    }
+    func updateUIViewController(_ controller: ImportPickerViewController, context: Context) {}
 }
 
-private final class ImportPickerHostController: UIViewController {
-    weak var pickerDelegate: UIDocumentPickerDelegate?
-    private var didPresentPicker = false
+private final class ImportPickerViewController: UIViewController, UIDocumentPickerDelegate {
+    private var hasPresentedPicker = false
 
-    override func loadView() {
-        let hostView = UIView()
-        hostView.backgroundColor = .black
-        view = hostView
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        guard !didPresentPicker, presentedViewController == nil else { return }
-        didPresentPicker = true
+        guard !hasPresentedPicker else { return }
+        hasPresentedPicker = true
+        presentFilesPicker()
+    }
 
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.item], asCopy: true)
+    private func presentFilesPicker() {
+        // Request a local copy from Files providers. This avoids relying on
+        // in-place document access, which can prevent some providers from handing
+        // the selected save back to embedded UIKit hosts such as Nyxian.
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: [UTType.data],
+            asCopy: true
+        )
+        picker.delegate = self
         picker.allowsMultipleSelection = false
-        picker.delegate = pickerDelegate
         picker.modalPresentationStyle = .formSheet
         present(picker, animated: true)
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        returnToLibrary()
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else {
+            returnToLibrary()
+            return
+        }
+        importSelectedFile(url)
+    }
+
+    private func importSelectedFile(_ url: URL) {
+        let hasAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if hasAccess { url.stopAccessingSecurityScopedResource() }
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let detected = try SaveEngineDetector.detect(
+                data: data,
+                filename: url.lastPathComponent
+            )
+
+            switch detected {
+            case .falloutShelter(let decoded):
+                let store = FSSEStore.shared
+                store.save = decoded
+                store.originalFileName = url.lastPathComponent
+
+                do {
+                    try AppFileStore.importFile(url)
+                    showResult(
+                        title: "IMPORT SUCCESSFUL",
+                        message: "Your Fallout Shelter save was imported and loaded successfully.\n\nFile: \(url.lastPathComponent)\nVault: \(store.vaultName)\nDwellers: \(store.dwellers.count)\nRooms: \(store.rooms.count)\nInventory items: \(store.inventory.count)\n\nAn untouched backup was saved in Settings > Imported Files."
+                    )
+                } catch {
+                    showResult(
+                        title: "IMPORT SUCCESSFUL — BACKUP ERROR",
+                        message: "Your Fallout Shelter save was loaded into the editor, but SAVEFORGE could not create its backup in Settings > Imported Files.\n\nFile: \(url.lastPathComponent)\n\nBackup error: \(error.localizedDescription)\n\nYour working save is still loaded."
+                    )
+                }
+
+            case .recognizedButUnavailable(let gameName):
+                showResult(
+                    title: "IMPORT ERROR — EDITOR UNAVAILABLE",
+                    message: "SAVEFORGE recognized this as a \(gameName) save, but its editing engine is not available yet. Your original file was not modified or imported."
+                )
+
+            case .unknown:
+                showResult(
+                    title: "IMPORT ERROR — UNSUPPORTED FILE",
+                    message: "SAVEFORGE could not identify this file as a supported game save. Nothing was changed and no backup was added. Check the relevant game page for supported save formats."
+                )
+            }
+        } catch {
+            showResult(
+                title: "IMPORT ERROR",
+                message: "SAVEFORGE could not read or process this file.\n\n\(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func showResult(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+            self?.returnToLibrary()
+        })
+        present(alert, animated: true)
+    }
+
+    private func returnToLibrary() {
+        if let navigationController, navigationController.viewControllers.count > 1 {
+            navigationController.popViewController(animated: true)
+        } else if presentingViewController != nil {
+            dismiss(animated: true)
+        }
     }
 }
 
@@ -971,7 +990,7 @@ private struct SettingsScreen: View {
                         }.buttonStyle(.plain)
                         SettingLine(icon: "arrow.counterclockwise", title: "Backup policy", detail: "Original files remain unchanged")
                         SettingLine(icon: "checkmark.shield", title: "Save validation", detail: "Game-specific checks enabled where supported")
-                        SectionLabel(title: "APPLICATION", detail: "V0.1.0")
+                        SectionLabel(title: "APPLICATION", detail: "V0.1.2")
                         NavigationLink { SaveforgeCreditsScreen() } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "info.circle.fill").foregroundStyle(SF.gold).frame(width: 25)
@@ -982,7 +1001,7 @@ private struct SettingsScreen: View {
                                 Spacer(); Image(systemName: "chevron.right").foregroundStyle(SF.gold)
                             }.padding(13).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 12))
                         }.buttonStyle(.plain)
-                        SettingLine(icon: "app", title: "Version", detail: "0.1.0")
+                        SettingLine(icon: "app", title: "Version", detail: "0.1.2")
                         SettingLine(icon: "iphone", title: "Platform", detail: "iOS and iPadOS")
                         SettingLine(icon: "wifi.slash", title: "Connectivity", detail: "Designed for offline use")
                     }.padding(18)
