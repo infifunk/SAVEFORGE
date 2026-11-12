@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b0d">
+  <meta name="description" content="SAVEFORGE — Cyber Forge. A multi-game save editor for iOS and iPadOS.">
+  <title>SAVEFORGE — Cyber Forge</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b0d;
+      --panel: #111519;
+      --panel-2: #151b20;
+      --line: rgba(218, 174, 91, .2);
+      --gold: #e0b45e;
+      --gold-bright: #f2cf83;
+      --cyan: #5bd9e8;
+      --muted: #9aa5ad;
+      --text: #f2f4f5;
+      --green: #8bd6a1;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse at 50% -15%, rgba(224,180,94,.13), transparent 42rem),
+        radial-gradient(ellipse at 100% 40%, rgba(91,217,232,.06), transparent 34rem),
+        var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    a { color: inherit; text-decoration: none; }
+    .wrap { width: min(1080px, calc(100% - 40px)); margin: 0 auto; }
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(9,11,13,.82); backdrop-filter: blur(18px);
+      border-bottom: 1px solid rgba(255,255,255,.07);
+    }
+    .nav { min-height: 70px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 850; letter-spacing: .13em; }
+    .brand-mark {
+      width: 34px; height: 34px; display: grid; place-items: center;
+      border: 1px solid var(--gold); color: var(--gold); border-radius: 9px;
+      font-size: 17px; box-shadow: 0 0 18px rgba(224,180,94,.12);
+    }
+    .brand small { display: block; color: var(--muted); font-size: 9px; letter-spacing: .25em; font-weight: 600; margin-top: -4px; }
+    .nav-links { display: flex; align-items: center; gap: 25px; color: #c4cbd0; font-size: 13px; }
+    .nav-links a:hover { color: var(--gold-bright); }
+    .nav-cta, .button {
+      display: inline-flex; justify-content: center; align-items: center; gap: 9px;
+      border: 1px solid var(--gold); border-radius: 8px; padding: 11px 17px;
+      color: var(--gold-bright); font-size: 13px; font-weight: 750; letter-spacing: .04em;
+      transition: .2s ease; background: rgba(224,180,94,.07);
+    }
+    .nav-cta:hover, .button:hover { background: rgba(224,180,94,.16); transform: translateY(-1px); }
+    .button.primary { color: #111; background: linear-gradient(135deg, #f0cc7e, #c9943e); border-color: transparent; }
+    .button.primary:hover { filter: brightness(1.08); }
+    .hero { padding: 92px 0 76px; text-align: center; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 9px; padding: 7px 12px;
+      border: 1px solid var(--line); border-radius: 999px; color: var(--gold-bright);
+      background: rgba(224,180,94,.055); font-size: 10px; letter-spacing: .19em; font-weight: 800;
+      text-transform: uppercase;
+    }
+    .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+    h1 { margin: 25px 0 8px; font-size: clamp(43px, 8vw, 78px); line-height: .98; letter-spacing: -.055em; font-weight: 900; }
+    h1 span { color: var(--gold); }
+    .subtitle { color: var(--cyan); font-size: clamp(11px, 2vw, 14px); letter-spacing: .3em; font-weight: 800; text-transform: uppercase; }
+    .hero-copy { max-width: 610px; margin: 22px auto 28px; color: #aeb8bf; font-size: 16px; }
+    .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+    .hero-emblem {
+      width: 116px; height: 116px; margin: 0 auto 25px; display: grid; place-items: center;
+      border: 1px solid rgba(224,180,94,.38); border-radius: 28px;
+      background: linear-gradient(145deg, rgba(224,180,94,.13), rgba(91,217,232,.035));
+      box-shadow: 0 0 65px rgba(224,180,94,.09), inset 0 0 30px rgba(224,180,94,.04);
+    }
+    .hero-emblem svg { width: 70px; height: 70px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); max-width: 660px; margin: 55px auto 0; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(17,21,25,.72); }
+    .stat { padding: 17px 12px; }
+    .stat + .stat { border-left: 1px solid rgba(255,255,255,.08); }
+    .stat strong { display: block; color: var(--gold-bright); font-size: 18px; }
+    .stat span { color: var(--muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+    section { padding: 65px 0; }
+    .section-head { margin-bottom: 27px; }
+    .kicker { color: var(--cyan); font-size: 10px; letter-spacing: .22em; font-weight: 800; text-transform: uppercase; }
+    h2 { margin: 7px 0 8px; font-size: clamp(27px, 4vw, 38px); letter-spacing: -.035em; }
+    .section-desc { color: var(--muted); max-width: 610px; margin: 0; font-size: 14px; }
+    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .feature, .game-card, .notice {
+      background: linear-gradient(145deg, rgba(21,27,32,.95), rgba(13,17,20,.95));
+      border: 1px solid rgba(255,255,255,.08); border-radius: 13px; padding: 22px;
+    }
+    .feature-icon { color: var(--gold); font-size: 20px; margin-bottom: 15px; }
+    .feature h3, .game-card h3 { margin: 0 0 7px; font-size: 16px; }
+    .feature p, .game-card p { margin: 0; color: var(--muted); font-size: 13px; }
+    .game-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .game-card { position: relative; min-height: 142px; overflow: hidden; }
+    .game-card:after { content: ""; position: absolute; width: 90px; height: 90px; right: -25px; bottom: -35px; border: 1px solid rgba(91,217,232,.15); transform: rotate(35deg); border-radius: 18px; }
+    .game-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; }
+    .game-symbol { color: var(--cyan); font-size: 19px; font-weight: 900; }
+    .status { font-size: 9px; text-transform: uppercase; letter-spacing: .12em; font-weight: 850; color: var(--muted); border: 1px solid rgba(255,255,255,.12); padding: 5px 8px; border-radius: 99px; white-space: nowrap; }
+    .status.ready { color: var(--green); border-color: rgba(139,214,161,.28); background: rgba(139,214,161,.06); }
+    .game-card.ready-card { border-color: rgba(139,214,161,.22); }
+    .notice { border-color: rgba(224,180,94,.2); display: flex; gap: 15px; align-items: flex-start; }
+    .notice-icon { color: var(--gold); font-size: 20px; }
+    .notice strong { display: block; margin-bottom: 4px; }
+    .notice p { color: var(--muted); font-size: 13px; margin: 0; }
+    .cta-panel {
+      text-align: center; padding: 42px 24px; border: 1px solid rgba(224,180,94,.23); border-radius: 16px;
+      background: radial-gradient(ellipse at 50% 0%, rgba(224,180,94,.11), transparent 65%), #101418;
+    }
+    .cta-panel p { color: var(--muted); max-width: 520px; margin: 10px auto 22px; font-size: 14px; }
+    footer { border-top: 1px solid rgba(255,255,255,.08); padding: 25px 0 35px; color: #7f8a92; font-size: 11px; }
+    .footer-inner { display: flex; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
+    .footer-inner a { color: var(--gold-bright); }
+    @media (max-width: 720px) {
+      .wrap { width: min(100% - 30px, 560px); }
+      .nav { min-height: 62px; }
+      .nav-links { gap: 13px; font-size: 11px; }
+      .nav-links a:nth-child(2) { display: none; }
+      .nav-cta { padding: 9px 11px; font-size: 11px; }
+      .hero { padding: 66px 0 50px; }
+      section { padding: 48px 0; }
+      .feature-grid, .game-grid { grid-template-columns: repeat(2, 1fr); }
+      .feature { padding: 17px; }
+      .stats { margin-top: 40px; }
+    }
+    @media (max-width: 420px) {
+      .brand { letter-spacing: .08em; font-size: 13px; }
+      .brand small { font-size: 8px; }
+      .nav-links { gap: 10px; }
+      .nav-links a:nth-child(1) { display: none; }
+      .feature-grid, .game-grid { grid-template-columns: 1fr; }
+      .game-card { min-height: 125px; }
+      .stat strong { font-size: 16px; }
+      .stat span { font-size: 8px; letter-spacing: .08em; }
+      .hero-copy { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <a class="brand" href="#top" aria-label="SAVEFORGE home">
+        <span class="brand-mark">✦</span>
+        <span>SAVEFORGE<small>CYBER FORGE</small></span>
+      </a>
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#games">Game library</a>
+        <a href="#about">About</a>
+      </nav>
+      <a class="nav-cta" href="https://discord.gg/44gZWmEVzy" target="_blank" rel="noopener">Join Discord ↗</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="wrap hero">
+      <div class="hero-emblem" aria-hidden="true">
+        <svg viewBox="0 0 100 100" fill="none">
+          <path d="M50 7 88 29v42L50 93 12 71V29L50 7Z" stroke="#e0b45e" stroke-width="2"/>
+          <path d="M50 19 77 35v30L50 81 23 65V35l27-16Z" stroke="#5bd9e8" stroke-width="1.5" opacity=".8"/>
+          <path d="M35 62V38h8l7 11 7-11h8v24h-8V51l-7 10-7-10v11h-8Z" fill="#f2cf83"/>
+          <circle cx="50" cy="50" r="39" stroke="#e0b45e" stroke-width=".8" stroke-dasharray="2 5" opacity=".7"/>
+        </svg>
+      </div>
+      <div class="eyebrow"><span class="pulse"></span> Version 0.1.0 · Initial Release</div>
+      <h1>YOUR SAVES.<br><span>YOUR CONTROL.</span></h1>
+      <div class="subtitle">SAVEFORGE — Cyber Forge</div>
+      <p class="hero-copy">A growing collection of game save editors for iOS and iPadOS. Take control of your saves with a purpose-built editing experience.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/infifunk" target="_blank" rel="noopener">Explore on GitHub ↗</a>
+        <a class="button" href="https://discord.gg/44gZWmEVzy" target="_blank" rel="noopener">Join the Community</a>
+      </div>
+      <div class="stats">
+        <div class="stat"><strong>0.1.0</strong><span>Current release</span></div>
+        <div class="stat"><strong>iOS / iPadOS</strong><span>Platform</span></div>
+        <div class="stat"><strong>SwiftUI</strong><span>Built native</span></div>
+      </div>
+    </div>
+
+    <section id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="kicker">Built for control</div>
+          <h2>One forge. More possibilities.</h2>
+          <p class="section-desc">SAVEFORGE brings game save tools together in a clean, native experience designed for mobile.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature">
+            <div class="feature-icon">⌘</div>
+            <h3>Save Editing</h3>
+            <p>Import compatible saves, edit supported game data, and export your changes.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon">▦</div>
+            <h3>Game Library</h3>
+            <p>Browse a growing library of games, with editor availability clearly identified.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon">◈</div>
+            <h3>Native Experience</h3>
+            <p>A purpose-built SwiftUI interface with a focused Cyber Forge visual identity.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="games">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="kicker">The library</div>
+          <h2>Choose your game.</h2>
+          <p class="section-desc">Fallout Shelter editing is available now. More game editors are planned for future updates.</p>
+        </div>
+        <div class="game-grid">
+          <article class="game-card ready-card">
+            <div class="game-top"><span class="game-symbol">FS</span><span class="status ready">Editor ready</span></div>
+            <h3>Fallout Shelter</h3><p>Vault, resources, dwellers, inventory and rooms.</p>
+          </article>
+          <article class="game-card">
+            <div class="game-top"><span class="game-symbol">SV</span><span class="status">Coming soon</span></div>
+            <h3>Stardew Valley</h3><p>Editor planned.</p>
+          </article>
+          <article class="game-card">
+            <div class="game-top"><span class="game-symbol">TR</span><span class="status">Coming soon</span></div>
+            <h3>Terraria</h3><p>Editor planned.</p>
+          </article>
+          <article class="game-card">
+            <div class="game-top"><span class="game-symbol">MC</span><span class="status">Coming soon</span></div>
+            <h3>Minecraft Bedrock</h3><p>Editor planned.</p>
+          </article>
+          <article class="game-card">
+            <div class="game-top"><span class="game-symbol">WB</span><span class="status">Coming soon</span></div>
+            <h3>WorldBox</h3><p>Editor planned.</p>
+          </article>
+          <article class="game-card">
+            <div class="game-top"><span class="game-symbol">TT</span><span class="status">Coming soon</span></div>
+            <h3>TheoTown</h3><p>Editor planned.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="about">
+      <div class="wrap">
+        <div class="notice">
+          <div class="notice-icon">ⓘ</div>
+          <div>
+            <strong>About Fallout Shelter save access</strong>
+            <p>On jailbroken devices, compatible saves can be accessed directly from the device filesystem. On non-jailbroken devices, the Fallout Shelter workflow requires WQFiles running inside LiveContainer. Always keep a backup of your original save before editing.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="cta-panel">
+          <div class="kicker">Enter the forge</div>
+          <h2>Be part of what comes next.</h2>
+          <p>Follow development, share feedback, and keep up with future SAVEFORGE releases.</p>
+          <div class="actions">
+            <a class="button primary" href="https://discord.gg/44gZWmEVzy" target="_blank" rel="noopener">Join SAVEFORGE Discord ↗</a>
+            <a class="button" href="https://github.com/infifunk" target="_blank" rel="noopener">GitHub ↗</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-inner">
+      <span>© 2026 Infifunk · SAVEFORGE — Cyber Forge</span>
+      <span>Independent project. Not affiliated with the respective game developers or publishers.</span>
+    </div>
+  </footer>
+</body>
+</html>
