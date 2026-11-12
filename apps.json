@@ -1,0 +1,22 @@
+
+{
+  "name": "SAVEFORGE",
+  "identifier": "com.infifunk.saveforge.source",
+  "sourceURL": "https://raw.githubusercontent.com/infifunk/SAVEFORGE/main/apps.json",
+  "apps": [
+    {
+      "name": "SAVEFORGE",
+      "bundleIdentifier": "com.github.infifunk.SAVEFORGE",
+      "developerName": "InfiFunk",
+      "subtitle": "Cyber Forge",
+      "localizedDescription": "SAVEFORGE is an iOS game save editor built by InfiFunk.",
+      "versions": [
+        {
+          "version": "0.1.2",
+          "date": "2026-11-12",
+          "downloadURL": "https://github.com/infifunk/SAVEFORGE/releases/latest/download/SAVEFORGE.ipa"
+        }
+      ]
+    }
+  ]
+}
