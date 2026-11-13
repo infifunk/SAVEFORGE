@@ -133,6 +133,8 @@ SAVEFORGE is provided as a save-editing utility. Users are responsible for maint
 
 SAVEFORGE is an independent, fan-made project and is not affiliated with, endorsed by, or sponsored by Bethesda Softworks or Microsoft.
 
+This app is being developed with use of AI.
+
 All game names, trademarks, and third-party assets belong to their respective owners.
 
 # **License**
