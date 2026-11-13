@@ -1,10 +1,7 @@
 //
 // ContentView.swift
 // SAVEFORGE — Cyber Forge
-// v0.1.2
-//
-// Nyxian-safe UI foundation.
-// No SwiftUI state or environment property wrappers.
+// v0.1.3
 //
 
 import SwiftUI
@@ -85,7 +82,7 @@ private struct LibraryScreen: View {
                         LazyVStack(spacing: 14) {
                             ForEach(GameInfo.all) { game in
                                 NavigationLink {
-                                    GameEditorScreen(game: game)
+                                    GameDestination(game: game)
                                 } label: {
                                     GameCard(game: game)
                                 }
@@ -95,7 +92,7 @@ private struct LibraryScreen: View {
 
                         HStack(spacing: 7) {
                             Image(systemName: "lock.shield")
-                            Text("LOCAL-FIRST • YOUR FILES STAY ON YOUR DEVICE • v0.1.2")
+                            Text("LOCAL-FIRST • YOUR FILES STAY ON YOUR DEVICE • v0.1.3")
                         }
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .tracking(0.5)
@@ -119,21 +116,6 @@ private struct LibraryScreen: View {
 private struct ForgeHeader: View {
     var body: some View {
         VStack(spacing: 9) {
-            HStack {
-                Spacer()
-                NavigationLink {
-                    SettingsScreen()
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SF.gold)
-                        .frame(width: 40, height: 40)
-                        .background(SF.panel)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(SF.gold.opacity(0.4), lineWidth: 1))
-                }
-            }
-
             ZStack {
                 Circle()
                     .stroke(SF.gold, lineWidth: 4)
@@ -175,6 +157,7 @@ private struct ForgeHeader: View {
         }
         .padding(.top, 8)
         .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
@@ -441,6 +424,105 @@ private struct GameEditorScreen: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+                        } else if game.id == "stardew" {
+                            Button {
+                                StardewFileImportLauncher.presentPicker()
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "folder.badge.plus")
+                                        .font(.system(size: 18, weight: .bold))
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("LOAD STARDEW SAVE FILE")
+                                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                                        Text("Choose the extracted farm save file")
+                                            .font(.system(size: 10)).foregroundStyle(SF.muted)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right").foregroundStyle(game.accent)
+                                }
+                                .foregroundStyle(game.accent).padding(14).background(game.panel)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(game.accent.opacity(0.55), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                StardewCatalogManager.downloadAll { result in
+                                    let alert = UIAlertController(
+                                        title: result.title,
+                                        message: result.message,
+                                        preferredStyle: .alert
+                                    )
+                                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                                    UIApplication.shared.topMostViewController?.present(alert, animated: true)
+                                }
+                            } label: {
+                                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                                    let count = StardewCatalogManager.installedCount
+                                    HStack(spacing: 10) {
+                                        Image(systemName: count == StardewCatalogManager.totalCount ? "checkmark.seal.fill" : "arrow.down.circle.fill")
+                                            .font(.system(size: 19, weight: .bold))
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(count == StardewCatalogManager.totalCount ? "GAME DATA INSTALLED" : "DOWNLOAD GAME DATA (JSON)")
+                                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                                            Text("\(count)/\(StardewCatalogManager.totalCount) catalogs available offline · Item and tool lists")
+                                                .font(.system(size: 10)).foregroundStyle(SF.muted)
+                                        }
+                                        Spacer()
+                                        Image(systemName: count == StardewCatalogManager.totalCount ? "checkmark" : "chevron.down").foregroundStyle(game.accent)
+                                    }
+                                    .foregroundStyle(game.accent).padding(14).background(game.panel)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(game.accent.opacity(0.55), lineWidth: 1))
+                                }
+                            }
+                            .buttonStyle(.plain)
+
+                            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                                let count = StardewCatalogManager.installedCount
+                                HStack(spacing: 8) {
+                                    Image(systemName: count == StardewCatalogManager.totalCount ? "checkmark.seal.fill" : "externaldrive")
+                                    Text(count == StardewCatalogManager.totalCount
+                                         ? "OFFLINE GAME DATA READY · \(count)/\(StardewCatalogManager.totalCount) FILES"
+                                         : "GAME DATA · \(count)/\(StardewCatalogManager.totalCount) FILES DOWNLOADED")
+                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    Spacer()
+                                }
+                                .foregroundStyle(count == StardewCatalogManager.totalCount ? game.accent : SF.muted)
+                                .padding(.horizontal, 4)
+                            }
+
+                            SectionLabel(title: "STARDEW EDITOR", detail: "SELECT A MODULE")
+                            ForEach(game.modules, id: \.title) { module in
+                                NavigationLink {
+                                    StardewEditorHost(sectionTitle: module.title)
+                                        .navigationTitle(module.title.uppercased())
+                                        .navigationBarTitleDisplayMode(.inline)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: module.symbol)
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundStyle(game.accent)
+                                            .frame(width: 42, height: 42)
+                                            .background(game.accent.opacity(0.12))
+                                            .clipShape(RoundedRectangle(cornerRadius: 11))
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(module.title.uppercased())
+                                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                                .foregroundStyle(SF.text)
+                                            Text(module.detail)
+                                                .font(.system(size: 10)).foregroundStyle(SF.muted)
+                                        }
+                                        Spacer(minLength: 8)
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 11, weight: .bold)).foregroundStyle(game.accent)
+                                    }
+                                    .padding(13).frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(game.panel).clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .overlay { RoundedRectangle(cornerRadius: 14).stroke(game.accent.opacity(0.4), lineWidth: 1) }
+                                }
+                                .buttonStyle(.plain)
+                            }
                         } else {
                             SectionLabel(title: "EDITOR MODULES", detail: "PLANNED")
                             ForEach(game.modules, id: \.title) { module in
@@ -464,7 +546,7 @@ private struct GameEditorScreen: View {
                             }
                         }
 
-                        Text(game.id == "fallout" ? "IMPORT A VAULT.SAV, THEN OPEN A MODULE TO EDIT ITS DATA. EXPORT CREATES A SEPARATE COPY." : "This is a visual preview. Editing will be enabled after the game's save format and import/export workflow are implemented and tested.")
+                        Text(game.id == "fallout" ? "IMPORT A VAULT.SAV, THEN OPEN A MODULE TO EDIT ITS DATA. EXPORT CREATES A SEPARATE COPY." : (game.id == "stardew" ? "IMPORT YOUR FARM SAVE, THEN OPEN A MODULE TO EDIT ITS DATA. EXPORT CREATES A SEPARATE COPY." : "This is a visual preview. Editing will be enabled after the game's save format and import/export workflow are implemented and tested."))
                             .font(.system(size: 10))
                             .foregroundStyle(SF.muted)
                             .lineSpacing(3)
@@ -479,6 +561,1247 @@ private struct GameEditorScreen: View {
         .navigationTitle("SAVEFORGE")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .onAppear { AppLibraryStore.shared.recordOpen(game.id) }
+    }
+}
+
+// MARK: - Game destinations
+
+private struct GameDestination: View {
+    let game: GameInfo
+    var body: some View { GameEditorScreen(game: game) }
+}
+
+private struct StardewEditorHost: UIViewControllerRepresentable {
+    let sectionTitle: String
+    func makeUIViewController(context: Context) -> StardewEditorViewController {
+        StardewEditorViewController(initialSection: sectionTitle)
+    }
+    func updateUIViewController(_ controller: StardewEditorViewController, context: Context) {}
+}
+
+private enum StardewCatalogManager {
+    struct Result {
+        let title: String
+        let message: String
+    }
+
+    // Public MIT-licensed Stardew Valley data package. Catalogs are reference data,
+    // not save files. The editor uses these IDs for item and content lookups.
+    private static let version = "1.1.0"
+    private static let files = [
+        "crops", "trees", "animals", "forageables", "artisan-goods", "mixed-seeds", "seasons",
+        "fish", "bait", "tackle", "minerals", "artifacts", "villagers", "universal-gifts", "events",
+        "monsters", "monster-slayer-goals", "weapons", "weapon-stats", "rings", "trinkets", "tools",
+        "hats", "footwear", "skills", "professions", "achievements", "perfection", "stardrops",
+        "golden-walnuts", "special-items", "bundles", "cooking", "crafting", "collections", "buildings",
+        "locations", "maps", "farmhouse", "quests", "special-orders", "secret-notes", "lost-books",
+        "concessions", "field-office", "weather", "objects", "pierre-shop", "joja-shop", "blacksmith-shop",
+        "carpenter-shop", "saloon-shop", "marnie-shop", "willy-shop", "krobus-shop", "wizard-shop",
+        "guild-shop", "casino-shop", "qi-shop", "oasis-shop", "desert-trader-shop", "dwarf-shop",
+        "medical-supplies-shop", "bookseller-shop", "volcano-shop", "island-trader-shop"
+    ]
+
+    // All downloaded JSON catalogs live inside the shared SAVEFORGE storage folder.
+    static var directory: URL {
+        AppFileStore.documentsDirectory
+            .appendingPathComponent("SAVEFORGE", isDirectory: true)
+            .appendingPathComponent("StardewCatalog", isDirectory: true)
+    }
+
+    static var totalCount: Int { files.count }
+
+    static var installedCount: Int {
+        files.filter { name in
+            let url = localFile(name)
+            guard let data = try? Data(contentsOf: url),
+                  let json = try? JSONSerialization.jsonObject(with: data),
+                  json is [Any] || json is [String: Any] else { return false }
+            return true
+        }.count
+    }
+
+    static func localFile(_ name: String) -> URL {
+        directory.appendingPathComponent(name + ".json")
+    }
+
+    // Convert the downloaded reference datasets into selectable inventory entries.
+    // Only records with a numeric in-game object ID are offered to the legacy
+    // object-item writer; descriptive slug IDs are deliberately not guessed.
+    static func inventoryCatalog() -> [(id: Int, name: String)] {
+        let itemFiles = ["bait", "tackle", "minerals", "artifacts", "forageables", "fish", "artisan-goods", "weapons", "rings", "trinkets", "footwear", "hats"]
+        var byID: [Int: String] = [:]
+        func visit(_ value: Any) {
+            if let array = value as? [Any] { array.forEach(visit); return }
+            guard let object = value as? [String: Any] else { return }
+            let idKeys = ["gameId", "itemId", "parentSheetIndex", "parentSheetId", "id"]
+            let nameKeys = ["displayName", "display_name", "name", "Name"]
+            var numericID: Int?
+            for key in idKeys {
+                if let number = object[key] as? NSNumber { numericID = number.intValue; break }
+                if let string = object[key] as? String, let number = Int(string) { numericID = number; break }
+            }
+            var displayName: String?
+            for key in nameKeys {
+                if let value = object[key] as? String, !value.isEmpty { displayName = value; break }
+            }
+            if let id = numericID, id >= 0, let name = displayName {
+                byID[id] = name
+            }
+            object.values.forEach(visit)
+        }
+        for file in itemFiles {
+            guard let data = try? Data(contentsOf: localFile(file)),
+                  let json = try? JSONSerialization.jsonObject(with: data) else { continue }
+            visit(json)
+        }
+
+        // The dedicated Stardew IDs dataset provides the actual vanilla object IDs
+        // and localized name map. Prefer its English display names for the picker.
+        if let data = try? Data(contentsOf: localFile("objects")),
+           let records = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            for record in records {
+                guard let rawID = record["id"] as? String,
+                      let id = Int(rawID),
+                      let names = record["names"] as? [String: String],
+                      let name = names["data-en-US"], !name.isEmpty else { continue }
+                byID[id] = name
+            }
+        }
+
+        return byID.map { (id: $0.key, name: $0.value) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    static func toolCatalog() -> [(className: String, name: String)] {
+        let url = localFile("tools")
+        guard let data = try? Data(contentsOf: url),
+              let records = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+
+        let xmlClasses: [String: String] = [
+            "hoe": "Hoe",
+            "pickaxe": "Pickaxe",
+            "axe": "Axe",
+            "watering-can": "WateringCan",
+            "fishing-rod": "FishingRod",
+            "pan": "Pan",
+            "scythe": "MeleeWeapon",
+            "golden-scythe": "MeleeWeapon",
+            "iridium-scythe": "MeleeWeapon",
+            "milk-pail": "MilkPail",
+            "shears": "Shears"
+        ]
+
+        var results: [(className: String, name: String)] = []
+        var seen = Set<String>()
+        for record in records {
+            guard let id = record["id"] as? String,
+                  let className = xmlClasses[id],
+                  let name = record["name"] as? String,
+                  !name.isEmpty,
+                  seen.insert(id).inserted else { continue }
+            results.append((className: className, name: name))
+        }
+
+        return results.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    static func downloadAll(completion: @escaping (Result) -> Void) {
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var downloaded: [String] = []
+        var failures: [String] = []
+
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            completion(Result(title: "CATALOG DOWNLOAD FAILED", message: error.localizedDescription))
+            return
+        }
+
+        for name in files {
+            group.enter()
+            let urlString: String
+            if name == "objects" {
+                urlString = "https://raw.githubusercontent.com/MateusAquino/stardewids/main/dist/objects.json"
+            } else {
+                urlString = "https://cdn.jsdelivr.net/npm/stardew-valley-data@\(version)/data/\(name).json"
+            }
+            guard let url = URL(string: urlString) else {
+                lock.lock(); failures.append(name); lock.unlock()
+                group.leave()
+                continue
+            }
+            URLSession.shared.dataTask(with: url) { data, response, error in
+                defer { group.leave() }
+                guard error == nil,
+                      let response = response as? HTTPURLResponse,
+                      (200...299).contains(response.statusCode),
+                      let data,
+                      let json = try? JSONSerialization.jsonObject(with: data),
+                      (json is [Any] || json is [String: Any]) else {
+                    lock.lock(); failures.append(name); lock.unlock()
+                    return
+                }
+
+                let destination = localFile(name)
+                let temporary = directory.appendingPathComponent(".\(name).download")
+                do {
+                    try data.write(to: temporary, options: .atomic)
+                    if FileManager.default.fileExists(atPath: destination.path) {
+                        try FileManager.default.removeItem(at: destination)
+                    }
+                    try FileManager.default.moveItem(at: temporary, to: destination)
+                    lock.lock(); downloaded.append(name); lock.unlock()
+                } catch {
+                    lock.lock(); failures.append(name); lock.unlock()
+                    try? FileManager.default.removeItem(at: temporary)
+                }
+            }.resume()
+        }
+
+        group.notify(queue: .main) {
+            let message = "Downloaded \(downloaded.count) of \(files.count) catalogs.\n\nSaved offline to Documents/StardewCatalog.\n\n" +
+                (failures.isEmpty ? "All catalogs validated successfully." : "Unavailable or invalid: \(failures.joined(separator: ", "))")
+            completion(Result(title: failures.isEmpty ? "GAME DATA READY" : "GAME DATA PARTIALLY DOWNLOADED", message: message))
+        }
+    }
+}
+
+private final class StardewEditorViewController: UIViewController {
+    private let initialSection: String
+    init(initialSection: String) {
+        self.initialSection = initialSection
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    private let brown = UIColor(red: 0.12, green: 0.085, blue: 0.055, alpha: 1)
+    private let panel = UIColor(red: 0.19, green: 0.135, blue: 0.085, alpha: 1)
+    private let gold = UIColor(red: 0.95, green: 0.68, blue: 0.25, alpha: 1)
+    private let textColor = UIColor(white: 0.96, alpha: 1)
+    private let muted = UIColor(white: 0.66, alpha: 1)
+    // Keep the working save alive when the user leaves a section and opens another
+    // editor screen. The imported source file remains unchanged until export.
+    private static var sharedWorkingSaveURL: URL?
+    private static var sharedWorkingSaveData: Data?
+
+    static func clearWorkingCopy() {
+        sharedWorkingSaveURL = nil
+        sharedWorkingSaveData = nil
+    }
+
+    private var saveURL: URL? {
+        didSet { Self.sharedWorkingSaveURL = saveURL }
+    }
+    private var saveData: Data? {
+        didSet { Self.sharedWorkingSaveData = saveData }
+    }
+    private var fields: [String: UITextField] = [:]
+    private var currentSection = ""
+    private let scroll = UIScrollView()
+    private let content = UIStackView()
+    private let sectionNames: [(String, String, String)] = [
+        ("Farmer", "person.crop.circle", "Player identity and core stats"),
+        ("Resources", "leaf", "Money and farm resources"),
+        ("Inventory", "backpack", "Items and carried objects"),
+        ("Skills", "chart.bar.fill", "Skill levels and experience"),
+        ("Relationships", "heart.fill", "Friendship and social records"),
+        ("Farm", "house.fill", "Farm identity and world data"),
+        ("Animals", "pawprint.fill", "Farm animals and pets"),
+        ("Tools", "hammer.fill", "Add and manage farm tools"),
+        ("Progress", "trophy.fill", "Calendar and progression")
+    ]
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = brown
+        title = "STARDEW VALLEY"
+        navigationItem.largeTitleDisplayMode = .never
+
+        // Restore the in-memory working copy first. Only load the original imported
+        // save when no working copy exists or the imported source has changed.
+        if let workingURL = Self.sharedWorkingSaveURL,
+           let workingData = Self.sharedWorkingSaveData {
+            saveURL = workingURL
+            saveData = workingData
+        } else if let importedURL = locateSave(),
+                  let importedData = try? Data(contentsOf: importedURL),
+                  (try? StardewSaveParser.parse(data: importedData, filename: importedURL.lastPathComponent)) != nil {
+            saveURL = importedURL
+            saveData = importedData
+        }
+
+        showSection(initialSection)
+    }
+
+    private func configureStack() {
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        content.axis = .vertical
+        content.spacing = 12
+        content.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scroll)
+        scroll.addSubview(content)
+        NSLayoutConstraint.activate([
+            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            content.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 18),
+            content.leadingAnchor.constraint(equalTo: scroll.frameLayoutGuide.leadingAnchor, constant: 16),
+            content.trailingAnchor.constraint(equalTo: scroll.frameLayoutGuide.trailingAnchor, constant: -16),
+            content.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24)
+        ])
+    }
+
+    private func resetContent() {
+        scroll.removeFromSuperview()
+        content.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        fields.removeAll()
+        configureStack()
+    }
+
+    private func label(_ value: String, size: CGFloat = 12, color: UIColor? = nil, bold: Bool = true) -> UILabel {
+        let v = UILabel(); v.text = value; v.textColor = color ?? textColor
+        v.font = bold ? .systemFont(ofSize: size, weight: .bold) : .systemFont(ofSize: size)
+        v.numberOfLines = 0; return v
+    }
+
+    private func addHeader(_ titleText: String, detail: String) {
+        content.addArrangedSubview(label(titleText.uppercased(), size: 17, color: gold))
+        content.addArrangedSubview(label(detail, size: 11, color: muted, bold: false))
+    }
+
+    private func button(_ titleText: String, detail: String? = nil, action: @escaping () -> Void) -> UIButton {
+        let b = UIButton(type: .system); b.backgroundColor = panel; b.layer.cornerRadius = 13
+        b.layer.borderWidth = 1; b.layer.borderColor = gold.withAlphaComponent(0.28).cgColor
+        b.contentHorizontalAlignment = .left; b.titleLabel?.numberOfLines = 0
+        var config = UIButton.Configuration.plain(); config.title = titleText.uppercased()
+        config.subtitle = detail; config.baseForegroundColor = textColor
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in var x=a; x.font = .monospacedSystemFont(ofSize: 11, weight: .bold); return x }
+        config.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in var x=a; x.font = .systemFont(ofSize: 10); x.foregroundColor = self.muted; return x }
+        config.contentInsets = NSDirectionalEdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14); b.configuration = config
+        b.addAction(UIAction { _ in action() }, for: .touchUpInside); b.heightAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
+        return b
+    }
+
+    private func showDashboard() {
+        resetContent()
+        addHeader("Stardew Valley Editor", detail: "Select a section. Your imported save is kept untouched until you export a separate edited copy.")
+        if let url = saveURL, saveData != nil {
+            content.addArrangedSubview(label("WORKING COPY ACTIVE · \(url.lastPathComponent)", size: 10, color: UIColor.systemGreen))
+        } else if let url = locateSave() {
+            saveURL = url
+            saveData = try? Data(contentsOf: url)
+            content.addArrangedSubview(label("SAVE LOADED · \(url.lastPathComponent)", size: 10, color: UIColor.systemGreen))
+        } else {
+            content.addArrangedSubview(label("NO IMPORTED FARM SAVE FOUND. Use IMPORT A SAVE in the Library first.", size: 11, color: gold, bold: false))
+        }
+        let grid = UIStackView(); grid.axis = .vertical; grid.spacing = 9
+        for start in stride(from: 0, to: sectionNames.count, by: 3) {
+            let row = UIStackView(); row.axis = .horizontal; row.spacing = 9; row.distribution = .fillEqually
+            for item in sectionNames[start..<min(start+3, sectionNames.count)] {
+                let b = UIButton(type: .system); b.backgroundColor = panel; b.layer.cornerRadius = 12; b.layer.borderWidth = 1; b.layer.borderColor = gold.withAlphaComponent(0.35).cgColor
+                b.titleLabel?.font = .monospacedSystemFont(ofSize: 10, weight: .bold); b.titleLabel?.numberOfLines = 2; b.titleLabel?.textAlignment = .center
+                b.setTitle("\n\(item.0.uppercased())\n", for: .normal); b.setTitleColor(textColor, for: .normal); b.heightAnchor.constraint(equalToConstant: 76).isActive = true
+                b.addAction(UIAction { [weak self] _ in self?.showSection(item.0) }, for: .touchUpInside); row.addArrangedSubview(b)
+            }
+            while row.arrangedSubviews.count < 3 { row.addArrangedSubview(UIView()) }
+            grid.addArrangedSubview(row)
+        }
+        content.addArrangedSubview(grid)
+        content.addArrangedSubview(button("Reload Imported Save", detail: "Discard working edits and reload the original imported farm") { [weak self] in
+            guard let self, let url = self.locateSave(), let data = try? Data(contentsOf: url) else { return }
+            Self.sharedWorkingSaveURL = url
+            Self.sharedWorkingSaveData = data
+            self.saveURL = url
+            self.saveData = data
+            self.showDashboard()
+        })
+        content.addArrangedSubview(button("Export Edited Farm", detail: "Create a separate copy; original save remains unchanged") { [weak self] in self?.exportSave() })
+        content.addArrangedSubview(label("Fields that are not yet editable remain preserved in the exported XML. Complex collections are not modified by this build.", size: 10, color: muted, bold: false))
+    }
+
+    private func showSection(_ name: String) {
+        currentSection = name
+        resetContent()
+        let detail = sectionNames.first { $0.0 == name }?.2 ?? "Save data"
+        addHeader(name, detail: detail)
+
+        guard let data = saveData, let xml = String(data: data, encoding: .utf8) else {
+            content.addArrangedSubview(label("No imported Stardew farm is loaded. Return to the Stardew page and load your extracted farm save file.", size: 12, color: gold, bold: false))
+            content.addArrangedSubview(button("Back to Stardew Valley") { [weak self] in self?.navigationController?.popViewController(animated: true) })
+            return
+        }
+
+        if name == "Inventory" {
+            showInventoryEditor(xml)
+            return
+        }
+        if name == "Tools" || name == "Equipment" {
+            // Stardew's Library module is labeled Equipment, while the internal
+            // editor section is called Tools. Both names must open the same tool manager.
+            showToolsEditor(xml)
+            return
+        }
+        if ["Skills", "Relationships", "Animals"].contains(name) {
+            showStructuredSectionEditor(name, xml: xml)
+            return
+        }
+
+        // Each section exposes real XML-backed values. Repeated values are indexed
+        // so changing one entry does not overwrite every item with the same tag.
+        let specs: [(String, String, String, Int?)]
+        switch name {
+        case "Farmer":
+            specs = [("Farmer Name","name","text",nil),("Health","health","number",nil),("Maximum Health","maxHealth","number",nil),("Stamina","stamina","number",nil),("Maximum Stamina","maxStamina","number",nil)]
+        case "Resources":
+            specs = [("Money","money","number",nil),("Qi Gems","qiGems","number",nil),("Golden Walnuts","goldenWalnuts","number",nil)]
+        case "Farm":
+            specs = [("Farm Name","farmName","text",nil),("Farm Type","whichFarm","number",nil),("Greenhouse Unlocked","greenhouseUnlocked","bool",nil),("Community Center Complete","communityCenterComplete","bool",nil)]
+        case "Progress":
+            specs = [("Day","dayOfMonth","number",nil),("Season","currentSeason","text",nil),("Year","year","number",nil),("Total Days Played","daysPlayed","number",nil)]
+        case "Inventory":
+            specs = [("Item Stack Size","Stack","number",nil),("Item Quality","quality","number",nil),("Item Category","category","number",nil)]
+        case "Skills":
+            specs = [("Farming XP","experiencePoints","number",0),("Mining XP","experiencePoints","number",1),("Combat XP","experiencePoints","number",2),("Foraging XP","experiencePoints","number",3),("Fishing XP","experiencePoints","number",4)]
+        case "Relationships":
+            specs = [("Friendship Points","Points","number",nil),("Friendship Status","Status","text",nil)]
+        case "Animals":
+            specs = [("Animal Age","age","number",nil),("Animal Friendship","friendshipTowardFarmer","number",nil),("Animal Happiness","happiness","number",nil),("Animal Fullness","fullness","number",nil)]
+        default:
+            specs = []
+        }
+
+        if name == "Inventory" {
+            let catalog = StardewCatalogManager.localFile("weapons")
+            let hasCatalog = FileManager.default.fileExists(atPath: catalog.path)
+            content.addArrangedSubview(label(
+                hasCatalog ? "GAME DATA CATALOGS AVAILABLE OFFLINE" : "GAME DATA NOT DOWNLOADED · USE DOWNLOAD GAME DATA ON THE STARDEW PAGE",
+                size: 10,
+                color: hasCatalog ? UIColor.systemGreen : gold,
+                bold: true
+            ))
+        }
+
+        var added = 0
+        for (titleText, tag, kind, requestedOccurrence) in specs {
+            let matches = xmlTagValues(xml, tag: tag)
+            guard !matches.isEmpty else { continue }
+            let selected: [(Int, String)]
+            if let requestedOccurrence {
+                selected = matches.indices.contains(requestedOccurrence) ? [(requestedOccurrence, matches[requestedOccurrence])] : []
+            } else {
+                selected = Array(matches.enumerated()).prefix(12).map { ($0.offset, $0.element) }
+            }
+            for (occurrence, value) in selected {
+                let fieldKey = "\(tag)#\(occurrence)"
+                let title = selected.count > 1 ? "\(titleText) \(occurrence + 1)" : titleText
+                content.addArrangedSubview(label(title, size: 10, color: gold))
+                let field = UITextField()
+                field.text = value
+                field.textColor = textColor
+                field.backgroundColor = panel
+                field.layer.cornerRadius = 9
+                field.layer.borderWidth = 1
+                field.layer.borderColor = gold.withAlphaComponent(0.25).cgColor
+                field.font = .systemFont(ofSize: 14)
+                field.keyboardType = kind == "number" ? .numberPad : .default
+                field.autocorrectionType = .no
+                field.autocapitalizationType = .words
+                field.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 11, height: 1))
+                field.leftViewMode = .always
+                field.heightAnchor.constraint(equalToConstant: 44).isActive = true
+                fields[fieldKey] = field
+                content.addArrangedSubview(field)
+                added += 1
+            }
+        }
+
+        if added == 0 {
+            let message: String
+            switch name {
+            case "Inventory": message = "No editable item stack or quality values were found in this save. The inventory structure is preserved."
+            case "Skills": message = "No skill experience values were found in this save. The original skill data is preserved."
+            case "Relationships": message = "No friendship point or status values were found in this save."
+            case "Animals": message = "No animal age, friendship, happiness, or fullness values were found in this save."
+            default: message = "This save does not contain the supported values for this section."
+            }
+            content.addArrangedSubview(label(message, size: 12, color: muted, bold: false))
+        } else {
+            content.addArrangedSubview(label("Edit the values above, then save changes. Repeated XML values are edited individually; unrelated save data is retained.", size: 10, color: muted, bold: false))
+            content.addArrangedSubview(button("Save Changes to Working Copy", detail: "Apply edits before exporting") { [weak self] in self?.applyFields() })
+        }
+
+        content.addArrangedSubview(button("Export Edited Farm", detail: "Create a separate edited save copy") { [weak self] in self?.exportSave() })
+        content.addArrangedSubview(button("Back to Stardew Valley") { [weak self] in self?.navigationController?.popViewController(animated: true) })
+    }
+
+    private func showStructuredSectionEditor(_ name: String, xml: String) {
+        let sectionFields: [(String, String, String)]
+        switch name {
+        case "Skills":
+            sectionFields = [
+                ("Farming XP", "experiencePoints", "number"),
+                ("Mining XP", "experiencePoints", "number"),
+                ("Combat XP", "experiencePoints", "number"),
+                ("Foraging XP", "experiencePoints", "number"),
+                ("Fishing XP", "experiencePoints", "number")
+            ]
+        case "Relationships":
+            sectionFields = [("Villager name / ID", "villagerName", "text"), ("Friendship points", "friendshipPoints", "number")]
+        case "Animals":
+            sectionFields = [("Animal name", "animalName", "text"), ("Animal type", "animalType", "text"), ("Animal friendship", "friendshipTowardFarmer", "number"), ("Animal age", "age", "number")]
+        default:
+            sectionFields = [("Tool name", "toolName", "text"), ("Tool upgrade level", "upgradeLevel", "number"), ("Equipped item ID", "equippedItemID", "number")]
+        }
+
+        content.addArrangedSubview(label("EDITOR CONTROLS", size: 12, color: gold))
+        content.addArrangedSubview(label("These controls edit values in the current working save. Structured records are added only where the save format has a supported container.", size: 10, color: muted, bold: false))
+
+        if name == "Skills" {
+            let values = experienceValues(in: xml)
+            for index in 0..<5 {
+                let field = makeEditorField(placeholder: sectionFields[index].0)
+                field.keyboardType = .numberPad
+                field.text = values.indices.contains(index) ? values[index] : "0"
+                fields["experiencePoints#\(index)"] = field
+                content.addArrangedSubview(label(sectionFields[index].0, size: 10, color: gold))
+                content.addArrangedSubview(field)
+            }
+            content.addArrangedSubview(button("Save Skill XP", detail: "Update the five experience values") { [weak self] in
+                self?.applySkillExperience()
+            })
+        } else if name == "Relationships" {
+            let nameField = makeEditorField(placeholder: "Select a villager")
+            let pointsField = makeEditorField(placeholder: "Friendship points")
+            pointsField.keyboardType = .numberPad
+            content.addArrangedSubview(button("Browse Characters", detail: "Open a scrollable villager selection menu") { [weak self] in
+                guard let controller = self, let current = controller.saveData, let currentXML = String(data: current, encoding: .utf8) else { return }
+                let characters = controller.friendshipNames(in: currentXML)
+                controller.presentScrollMenu(title: "Villagers", options: characters) { index in
+                    guard characters.indices.contains(index) else { return }
+                    nameField.text = characters[index]
+                }
+            })
+            content.addArrangedSubview(label("SELECTED CHARACTER", size: 10, color: gold))
+            content.addArrangedSubview(nameField)
+            content.addArrangedSubview(label("FRIENDSHIP POINTS", size: 10, color: gold))
+            content.addArrangedSubview(pointsField)
+            content.addArrangedSubview(button("Add / Update Friendship", detail: "Write a villager friendship record") { [weak self] in
+                guard let self = self else { return }
+                guard let villager = nameField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !villager.isEmpty,
+                      let points = Int(pointsField.text ?? ""), points >= 0 else {
+                    self.showAlert("Invalid Friendship", "Enter a villager name and non-negative friendship points.")
+                    return
+                }
+                guard let data = self.saveData, let xml = String(data: data, encoding: .utf8),
+                      let updated = self.upsertFriendship(xml: xml, villager: villager, points: points) else {
+                    self.showAlert("Unable to Update", "This save does not contain a supported friendshipData dictionary.")
+                    return
+                }
+                self.saveData = updated.data(using: .utf8)
+                self.showAlert("Friendship Updated", "Updated \(villager) to \(points) points in the working copy.")
+                self.showSection("Relationships")
+            })
+            content.addArrangedSubview(label("Existing friendship records are retained. If friendshipData is missing, the editor creates the dictionary inside the player record before adding the selected villager.", size: 10, color: muted, bold: false))
+        } else if name == "Animals" {
+            content.addArrangedSubview(label("Animal records are stored inside farm buildings and require the building/animal XML structure. This editor shows the supported animal values found in the save; it does not fabricate a building or animal record.", size: 10, color: muted, bold: false))
+            let tags = ["name", "type", "age", "friendshipTowardFarmer", "happiness", "fullness"]
+            for tag in tags {
+                let vals = xmlTagValues(xml, tag: tag)
+                for (index, value) in vals.prefix(12).enumerated() {
+                    let field = makeEditorField(placeholder: tag)
+                    field.text = value
+                    fields["\(tag)#\(index)"] = field
+                    content.addArrangedSubview(label("\(tag) \(index+1)", size: 10, color: gold))
+                    content.addArrangedSubview(field)
+                }
+            }
+            if fields.isEmpty {
+                content.addArrangedSubview(label("No animal records found in this farm save. Importing or creating animal buildings requires additional building context.", size: 11, color: muted, bold: false))
+            } else {
+                content.addArrangedSubview(button("Save Animal Values", detail: "Update supported scalar fields") { [weak self] in self?.applyFields() })
+            }
+        } else {
+            content.addArrangedSubview(label("Equipment editor", size: 12, color: gold))
+            let tags = ["upgradeLevel", "upgradeLevel"]
+            for tag in tags {
+                let values = xmlTagValues(xml, tag: tag)
+                for (index, value) in values.prefix(20).enumerated() {
+                    let field = makeEditorField(placeholder: "Upgrade level")
+                    field.text = value
+                    field.keyboardType = .numberPad
+                    fields["\(tag)#\(index)"] = field
+                    content.addArrangedSubview(label("Tool upgrade \(index+1)", size: 10, color: gold))
+                    content.addArrangedSubview(field)
+                }
+            }
+            content.addArrangedSubview(label("Tools are represented by typed tool objects in the farmer inventory. Use Inventory to add/remove object items; equipment upgrades are editable here only when upgradeLevel values exist.", size: 10, color: muted, bold: false))
+            if !fields.isEmpty {
+                content.addArrangedSubview(button("Save Equipment Changes") { [weak self] in self?.applyFields() })
+            }
+        }
+
+        content.addArrangedSubview(button("Export Edited Farm", detail: "Create a separate edited save copy") { [weak self] in self?.exportSave() })
+        content.addArrangedSubview(button("Back to Stardew Valley") { [weak self] in self?.navigationController?.popViewController(animated: true) })
+    }
+
+    private func experienceValues(in xml: String) -> [String] {
+        let pattern = "<experiencePoints(?:\\s[^>]*)?>(.*?)</experiencePoints>"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
+              let match = regex.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)),
+              let range = Range(match.range(at: 1), in: xml) else { return [] }
+        let inner = String(xml[range])
+        let ints = try? NSRegularExpression(pattern: "<int>(.*?)</int>", options: [.dotMatchesLineSeparators])
+        return (ints?.matches(in: inner, range: NSRange(inner.startIndex..., in: inner)) ?? []).compactMap {
+            guard let r = Range($0.range(at: 1), in: inner) else { return nil }
+            return String(inner[r])
+        }
+    }
+
+    private func applySkillExperience() {
+        guard let data = saveData, var xml = String(data: data, encoding: .utf8) else { return }
+        let rawValues = (0..<5).map { fields["experiencePoints#\($0)"]?.text ?? "0" }
+        guard rawValues.allSatisfy({ Int($0) != nil && Int($0)! >= 0 }) else {
+            showAlert("Invalid XP", "Skill experience must be non-negative whole numbers.")
+            return
+        }
+        let values = rawValues.map { String(Int($0) ?? 0) }
+        let fragment = "<experiencePoints>" + values.map { "<int>\($0)</int>" }.joined() + "</experiencePoints>"
+        let pattern = "<experiencePoints(?:\\s[^>]*)?>.*?</experiencePoints>"
+        if let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
+           let match = regex.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)),
+           let range = Range(match.range, in: xml) {
+            xml.replaceSubrange(range, with: fragment)
+        } else if let playerOpen = xml.range(of: "<player>"),
+                  let playerClose = xml.range(of: "</player>", range: playerOpen.upperBound..<xml.endIndex) {
+            xml.insert(contentsOf: fragment, at: playerClose.lowerBound)
+        } else {
+            showAlert("Unsupported Save", "Could not find the player node.")
+            return
+        }
+        saveData = xml.data(using: .utf8)
+        showAlert("Skills Saved", "Updated skill XP in the working copy.")
+    }
+
+    private func upsertFriendship(xml: String, villager: String, points: Int) -> String? {
+        let escapedName = villager.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
+        let entry = "<item><key><string>\(escapedName)</string></key><value><Friendship><Points>\(points)</Points><Status>Friendly</Status></Friendship></value></item>"
+
+        // Locate the player's friendship dictionary. Some imported/test saves
+        // do not have friendshipData yet, so initialize it inside the player node.
+        if let open = xml.range(of: "<friendshipData>"),
+           let close = xml.range(of: "</friendshipData>", range: open.upperBound..<xml.endIndex) {
+            var body = String(xml[open.upperBound..<close.lowerBound])
+            let namePattern = "(<item>\\s*<key>\\s*<string>)" +
+                NSRegularExpression.escapedPattern(for: villager) +
+                "(</string>.*?</item>)"
+            if let regex = try? NSRegularExpression(pattern: namePattern, options: [.dotMatchesLineSeparators]),
+               let match = regex.firstMatch(in: body, range: NSRange(body.startIndex..., in: body)),
+               let range = Range(match.range, in: body) {
+                body.replaceSubrange(range, with: entry)
+            } else {
+                body += entry
+            }
+            var updated = xml
+            updated.replaceSubrange(open.upperBound..<close.lowerBound, with: body)
+            return updated
+        }
+
+        guard let playerOpen = xml.range(of: "<player>"),
+              let playerClose = xml.range(of: "</player>", range: playerOpen.upperBound..<xml.endIndex) else {
+            return nil
+        }
+
+        var updated = xml
+        let dictionary = "<friendshipData>\(entry)</friendshipData>"
+        updated.insert(contentsOf: dictionary, at: playerClose.lowerBound)
+        return updated
+    }
+
+    private func showToolsEditor(_ xml: String) {
+        let catalog = StardewCatalogManager.toolCatalog()
+        content.addArrangedSubview(label("FARM TOOLS", size: 12, color: gold))
+        content.addArrangedSubview(label("Choose a tool from the downloaded tools.json list. The editor creates a typed Stardew tool record and inserts it into your farmer inventory.", size: 10, color: muted, bold: false))
+        content.addArrangedSubview(label(
+            FileManager.default.fileExists(atPath: StardewCatalogManager.localFile("tools").path)
+                ? "TOOLS JSON INSTALLED · \(catalog.count) ADDABLE TOOL TYPES"
+                : "TOOLS JSON NOT DOWNLOADED · DOWNLOAD GAME DATA ON THE STARDEW PAGE",
+            size: 9,
+            color: catalog.isEmpty ? muted : gold
+        ))
+
+        content.addArrangedSubview(button("ADD TOOL", detail: "Open the downloaded tools list") { [weak self] in
+            guard let self else { return }
+            let latest = StardewCatalogManager.toolCatalog()
+            guard !latest.isEmpty else {
+                self.showAlert("TOOLS LIST NOT READY", "Download GAME DATA (JSON) from the Stardew Valley page first.")
+                return
+            }
+            self.presentScrollMenu(title: "ADD TOOL · SELECT TOOL", options: latest.map { $0.name }) { [weak self] index in
+                guard let self, latest.indices.contains(index),
+                      let currentData = self.saveData,
+                      let currentXML = String(data: currentData, encoding: .utf8) else { return }
+                let selected = latest[index]
+                guard let updated = self.createToolAndInsert(xml: currentXML, className: selected.className, displayName: selected.name) else {
+                    self.showAlert("INVENTORY STRUCTURE NOT FOUND", "This save does not contain a serialized \(selected.name) tool to clone. No save data was changed.")
+                    return
+                }
+                self.saveData = updated.data(using: .utf8)
+                Self.sharedWorkingSaveData = self.saveData
+                self.showAlert("TOOL ADDED", "\(selected.name) was added to the farmer inventory in the working copy.")
+                self.showSection("Tools")
+            }
+        })
+
+        let cleanInventoryXML = xml.replacingOccurrences(of: #"\\(fragment)"#, with: "")
+        let toolsInInventory = inventoryItems(in: cleanInventoryXML).filter { $0.id == -1 }
+        content.addArrangedSubview(label("TOOLS IN FARM INVENTORY · \(toolsInInventory.count)", size: 12, color: gold))
+        if toolsInInventory.isEmpty {
+            content.addArrangedSubview(label("No tools were found in the farmer inventory yet. Added tools will appear here.", size: 10, color: muted, bold: false))
+        } else {
+            for tool in toolsInInventory {
+                content.addArrangedSubview(label(tool.name, size: 11, color: textColor))
+            }
+        }
+        content.addArrangedSubview(button("Back to Stardew Valley") { [weak self] in self?.navigationController?.popViewController(animated: true) })
+    }
+
+    private func createToolAndInsert(xml: String, className: String, displayName: String) -> String? {
+        // Remove the literal placeholder written by earlier buggy builds.
+        var sourceXML = xml.replacingOccurrences(of: #"\\(fragment)"#, with: "")
+
+        // Every generated tool uses xsi:type. Declare the namespace even when
+        // the farmer already had an <items> collection (the earlier fix only
+        // handled saves where the collection was missing).
+        if !sourceXML.contains("xmlns:xsi="),
+           let rootStart = sourceXML.range(of: "<SaveGame"),
+           let rootEnd = sourceXML.range(of: ">", range: rootStart.upperBound..<sourceXML.endIndex) {
+            sourceXML.insert(
+                contentsOf: " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
+                at: rootEnd.lowerBound
+            )
+        }
+
+        let safeName = displayName
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
+
+        let baseName: String
+        let initialIndex: Int
+        let menuIndex: Int
+        switch className {
+        case "Axe": baseName = "Axe"; initialIndex = 189; menuIndex = 215
+        case "Hoe": baseName = "Hoe"; initialIndex = 21; menuIndex = 54
+        case "Pickaxe": baseName = "Pickaxe"; initialIndex = 0; menuIndex = 0
+        case "WateringCan": baseName = "Watering Can"; initialIndex = 273; menuIndex = 338
+        case "FishingRod": baseName = "Fishing Rod"; initialIndex = 8; menuIndex = 8
+        case "Pan": baseName = "Pan"; initialIndex = 0; menuIndex = 0
+        case "MilkPail": baseName = "Milk Pail"; initialIndex = 0; menuIndex = 0
+        case "Shears": baseName = "Shears"; initialIndex = 0; menuIndex = 0
+        case "MeleeWeapon":
+            baseName = displayName
+            initialIndex = displayName.localizedCaseInsensitiveContains("golden") ? 53 : 47
+            menuIndex = initialIndex
+        default: return nil
+        }
+
+        var extraFields = ""
+        if className == "WateringCan" {
+            extraFields = "<waterCanMax>40</waterCanMax><WaterLeft>0</WaterLeft>"
+        } else if className == "MeleeWeapon" {
+            extraFields = "<type>3</type><minDamage>1</minDamage><maxDamage>3</maxDamage><speed>0</speed><addedPrecision>0</addedPrecision><addedDefense>0</addedDefense><addedAreaOfEffect>0</addedAreaOfEffect><knockback>1</knockback><critChance>0.02</critChance><critMultiplier>3</critMultiplier><appearance>-1</appearance><isOnSpecial>false</isOnSpecial>"
+        }
+
+        let fragment = """
+        <Item xsi:type="\(className)"><isLostItem>false</isLostItem><category>-99</category><hasBeenInInventory>true</hasBeenInInventory><name>\(baseName)</name><specialItem>false</specialItem><SpecialVariable>0</SpecialVariable><DisplayName>\(safeName)</DisplayName><Name>\(safeName)</Name><Stack>1</Stack><initialParentTileIndex>\(initialIndex)</initialParentTileIndex><currentParentTileIndex>\(initialIndex)</currentParentTileIndex><indexOfMenuItemView>\(menuIndex)</indexOfMenuItemView><stackable>false</stackable><instantUse>false</instantUse><isEfficient>false</isEfficient><animationSpeedModifier>1</animationSpeedModifier><upgradeLevel>0</upgradeLevel><numAttachmentSlots>0</numAttachmentSlots><attachments />\(extraFields)<BaseName>\(baseName)</BaseName><InitialParentTileIndex>\(initialIndex)</InitialParentTileIndex><IndexOfMenuItemView>\(menuIndex)</IndexOfMenuItemView><InstantUse>false</InstantUse><IsEfficient>false</IsEfficient><AnimationSpeedModifier>1</AnimationSpeedModifier><Stackable>false</Stackable></Item>
+        """
+
+        // Important: Stardew saves contain many unrelated <items> collections
+        // (chests, fridges, machines). Only edit the <items> node inside <player>.
+        guard let playerContents = xmlElementContents(tag: "player", in: sourceXML) else {
+            return nil
+        }
+
+        // Minimal/imported test saves may omit the inventory node entirely.
+        // Create the farmer's <items> collection inside <player> instead of
+        // failing the Add Tool action. Never use another object's items list.
+        guard let itemsContents = xmlElementContents(tag: "items", in: sourceXML, within: playerContents) else {
+            var initialized = sourceXML
+            initialized.insert(contentsOf: "<items>\(fragment)</items>", at: playerContents.upperBound)
+
+            return initialized
+        }
+
+        let inventoryBody = String(sourceXML[itemsContents])
+        // Do not create duplicate instances of a tool class if one is already present.
+        let existingTypePattern = #"<Item\\b[^>]*xsi:type=""# + NSRegularExpression.escapedPattern(for: className) + #"""#
+        if let typeRegex = try? NSRegularExpression(pattern: existingTypePattern, options: [.dotMatchesLineSeparators]),
+           typeRegex.firstMatch(in: inventoryBody, range: NSRange(inventoryBody.startIndex..., in: inventoryBody)) != nil {
+            return nil
+        }
+        if let emptySlot = inventoryBody.range(
+            of: #"<Item\s+xsi:nil="true"\s*/>"#,
+            options: .regularExpression
+        ) {
+            let targetRange = emptySlotInXML(
+                xml: sourceXML,
+                bodyStart: itemsContents.lowerBound,
+                body: inventoryBody,
+                localRange: emptySlot
+            )
+            var updated = sourceXML
+            updated.replaceSubrange(targetRange, with: fragment)
+            return updated
+        }
+
+        var updated = sourceXML
+        updated.insert(contentsOf: fragment, at: itemsContents.upperBound)
+        return updated
+    }
+
+    private func xmlElementContents(tag: String, in xml: String, within outerRange: Range<String.Index>? = nil) -> Range<String.Index>? {
+        let searchRange = outerRange ?? xml.startIndex..<xml.endIndex
+        let escapedTag = NSRegularExpression.escapedPattern(for: tag)
+        let openPattern = "<\(escapedTag)\\b[^>]*>"
+        let closePattern = "</\(escapedTag)\\s*>"
+        guard let openRegex = try? NSRegularExpression(pattern: openPattern, options: []),
+              let closeRegex = try? NSRegularExpression(pattern: closePattern, options: []) else { return nil }
+
+        let searchNSRange = NSRange(searchRange, in: xml)
+        guard let openMatch = openRegex.firstMatch(in: xml, range: searchNSRange),
+              let openRange = Range(openMatch.range, in: xml) else { return nil }
+
+        let closeSearch = openRange.upperBound..<searchRange.upperBound
+        guard let closeMatch = closeRegex.firstMatch(in: xml, range: NSRange(closeSearch, in: xml)),
+              let closeRange = Range(closeMatch.range, in: xml) else { return nil }
+
+        return openRange.upperBound..<closeRange.lowerBound
+    }
+
+    private func emptySlotInXML(xml: String, bodyStart: String.Index, body: String, localRange: Range<String.Index>) -> Range<String.Index> {
+        let offset = body.distance(from: body.startIndex, to: localRange.lowerBound)
+        let start = xml.index(bodyStart, offsetBy: offset)
+        let end = xml.index(start, offsetBy: body.distance(from: localRange.lowerBound, to: localRange.upperBound))
+        return start..<end
+    }
+
+    private func showInventoryEditor(_ xml: String) {
+        let catalog = StardewCatalogManager.inventoryCatalog()
+        let installed = StardewCatalogManager.installedCount
+
+        content.addArrangedSubview(label("FARM INVENTORY", size: 12, color: gold))
+        content.addArrangedSubview(label("Add items from the downloaded game-data list. Choose a name from the scroll menu; item IDs are handled automatically.", size: 10, color: muted, bold: false))
+        content.addArrangedSubview(label("OFFLINE GAME DATA · \(installed)/\(StardewCatalogManager.totalCount) FILES · \(catalog.count) ITEMS AVAILABLE", size: 9, color: installed > 0 ? gold : muted))
+
+        content.addArrangedSubview(button("ADD ITEM", detail: "Open the item list and choose what to add") { [weak self] in
+            guard let controller = self else { return }
+            let latestCatalog = StardewCatalogManager.inventoryCatalog()
+            guard !latestCatalog.isEmpty else {
+                controller.showAlert("ITEM LIST NOT READY", "Download GAME DATA (JSON) from the Stardew Valley page first. Once the item catalogs are installed, this button opens the item list.")
+                return
+            }
+
+            let options = latestCatalog.map { $0.name }
+            controller.presentScrollMenu(title: "ADD ITEM · CHOOSE FROM LIST", options: options) { [weak self] index in
+                guard let self, latestCatalog.indices.contains(index) else { return }
+                let item = latestCatalog[index]
+                let quantityPrompt = UIAlertController(
+                    title: "Add \(item.name)",
+                    message: "Choose how many to add to your farm inventory.",
+                    preferredStyle: .alert
+                )
+                quantityPrompt.addTextField { field in
+                    field.placeholder = "Quantity"
+                    field.keyboardType = .numberPad
+                    field.text = "1"
+                }
+                quantityPrompt.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                quantityPrompt.addAction(UIAlertAction(title: "ADD", style: .default) { [weak self] _ in
+                    guard let self else { return }
+                    let rawQuantity = quantityPrompt.textFields?.first?.text ?? "1"
+                    guard let quantity = Int(rawQuantity), (1...999).contains(quantity) else {
+                        self.showAlert("INVALID QUANTITY", "Enter a whole number from 1 to 999.")
+                        return
+                    }
+                    guard let current = self.saveData,
+                          let currentXML = String(data: current, encoding: .utf8),
+                          let updated = self.addObjectItem(xml: currentXML, id: item.id, name: item.name, quantity: quantity, quality: 0) else {
+                        self.showAlert("UNABLE TO ADD ITEM", "The current save does not contain a supported player inventory structure. No data was changed.")
+                        return
+                    }
+                    self.saveData = updated.data(using: .utf8)
+                    self.showAlert("ITEM ADDED", "\(item.name) ×\(quantity) was added to the working copy.")
+                    self.showSection("Inventory")
+                })
+                self.present(quantityPrompt, animated: true)
+            }
+        })
+
+        let entries = inventoryItems(in: xml).filter { $0.id != -1 }
+        content.addArrangedSubview(label("CURRENT ITEMS · \(entries.count)", size: 12, color: gold))
+        if entries.isEmpty {
+            content.addArrangedSubview(label("Your farm inventory is empty. Tap ADD ITEM to choose an item from the downloaded list.", size: 10, color: muted, bold: false))
+        } else {
+            content.addArrangedSubview(button("OPEN INVENTORY", detail: "View, adjust, or remove items already in this farm") { [weak self] in
+                guard let controller = self, let data = controller.saveData, let currentXML = String(data: data, encoding: .utf8) else { return }
+                let currentEntries = controller.inventoryItems(in: currentXML).filter { $0.id != -1 }
+                let options = currentEntries.map { "\($0.name)  ·  ×\($0.quantity)" }
+                controller.presentScrollMenu(title: "FARM INVENTORY", options: options) { [weak self] index in
+                    guard let controller = self, currentEntries.indices.contains(index) else { return }
+                    let entry = currentEntries[index]
+                    let menu = UIAlertController(title: entry.name, message: "Quantity \(entry.quantity) · Quality \(entry.quality)", preferredStyle: .actionSheet)
+                    menu.addAction(UIAlertAction(title: "Increase Quantity (+1)", style: .default) { [weak self] _ in self?.adjustInventoryStack(at: index, delta: 1) })
+                    menu.addAction(UIAlertAction(title: "Decrease Quantity (−1)", style: .default) { [weak self] _ in self?.adjustInventoryStack(at: index, delta: -1) })
+                    menu.addAction(UIAlertAction(title: "Remove Item", style: .destructive) { [weak self] _ in
+                        guard let self, let data = self.saveData, let text = String(data: data, encoding: .utf8),
+                              let updated = self.removeInventoryItem(xml: text, index: index) else { return }
+                        self.saveData = updated.data(using: .utf8)
+                        self.showSection("Inventory")
+                    })
+                    menu.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                    if let popover = menu.popoverPresentationController {
+                        menu.popoverPresentationController?.sourceView = controller.view
+                        popover.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.maxY - 40, width: 1, height: 1)
+                    }
+                    controller.present(menu, animated: true)
+                }
+            })
+        }
+
+        content.addArrangedSubview(button("Export Edited Farm", detail: "Create a separate edited save copy") { [weak self] in self?.exportSave() })
+        content.addArrangedSubview(button("Back to Stardew Valley") { [weak self] in self?.navigationController?.popViewController(animated: true) })
+    }
+
+    private func adjustInventoryStack(at index: Int, delta: Int) {
+        guard let data = saveData, let xml = String(data: data, encoding: .utf8) else { return }
+        let entries = inventoryItems(in: xml)
+        guard entries.indices.contains(index) else { return }
+        let current = entries[index].quantity
+        let next = current + delta
+        guard next >= 1, next <= 999 else { showAlert("Quantity Limit", "Inventory stack quantity must be between 1 and 999."); return }
+        guard let open = xml.range(of: "<items>"), let close = xml.range(of: "</items>", range: open.upperBound..<xml.endIndex) else { return }
+        let body = String(xml[open.upperBound..<close.lowerBound])
+        let pattern = "<Item(?:\\s+[^>]*)?>(.*?)</Item>"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return }
+        var ordinaryMatches: [NSTextCheckingResult] = []
+        for match in regex.matches(in: body, range: NSRange(body.startIndex..., in: body)) {
+            guard let range = Range(match.range, in: body) else { continue }
+            let itemXML = String(body[range])
+            let isTool = itemXML.contains("xsi:type=\"Axe\"") ||
+                         itemXML.contains("xsi:type=\"Hoe\"") ||
+                         itemXML.contains("xsi:type=\"Pickaxe\"") ||
+                         itemXML.contains("xsi:type=\"WateringCan\"") ||
+                         itemXML.contains("xsi:type=\"FishingRod\"") ||
+                         itemXML.contains("xsi:type=\"MeleeWeapon\"") ||
+                         itemXML.contains("xsi:type=\"Scythe\"") ||
+                         itemXML.contains("xsi:type=\"Pan\"") ||
+                         itemXML.contains("xsi:type=\"MilkPail\"") ||
+                         itemXML.contains("xsi:type=\"Shears\"")
+            if !isTool {
+                ordinaryMatches.append(match)
+            }
+        }
+        guard ordinaryMatches.indices.contains(index),
+              let itemRange = Range(ordinaryMatches[index].range, in: body) else { return }
+        var item = String(body[itemRange])
+        if let stackRange = item.range(of: "<Stack>\\d+</Stack>", options: .regularExpression) {
+            item.replaceSubrange(stackRange, with: "<Stack>\(next)</Stack>")
+        }
+        if let stackRange = item.range(of: "<stack>\\d+</stack>", options: .regularExpression) {
+            item.replaceSubrange(stackRange, with: "<stack>\(next)</stack>")
+        }
+        var updatedBody = body
+        updatedBody.replaceSubrange(itemRange, with: item)
+        var updatedXML = xml
+        updatedXML.replaceSubrange(open.upperBound..<close.lowerBound, with: updatedBody)
+        saveData = updatedXML.data(using: .utf8)
+        showSection("Inventory")
+    }
+
+    private func makeEditorField(placeholder: String) -> UITextField {
+        let field = UITextField()
+        field.placeholder = placeholder
+        field.textColor = textColor
+        field.backgroundColor = panel
+        field.layer.cornerRadius = 9
+        field.layer.borderWidth = 1
+        field.layer.borderColor = gold.withAlphaComponent(0.25).cgColor
+        field.font = .systemFont(ofSize: 14)
+        field.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 11, height: 1))
+        field.leftViewMode = .always
+        field.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        return field
+    }
+
+    private struct InventoryEntry {
+        let id: Int
+        let name: String
+        let quantity: Int
+        let quality: Int
+    }
+
+    private func inventoryItems(in xml: String) -> [InventoryEntry] {
+        guard let playerContents = xmlElementContents(tag: "player", in: xml),
+              let itemsContents = xmlElementContents(tag: "items", in: xml, within: playerContents) else { return [] }
+        let body = String(xml[itemsContents])
+        // Match the whole Item element so xsi:type is retained for tool detection.
+        let pattern = #"<Item(?:\s+[^>]*)?>.*?</Item>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return [] }
+        return regex.matches(in: body, range: NSRange(body.startIndex..., in: body)).compactMap { match in
+            guard let range = Range(match.range, in: body) else { return nil }
+            let item = String(body[range])
+            func value(_ tag: String) -> String? {
+                let pattern = "<" + tag + ">(.*?)</" + tag + ">"
+                guard let expression = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
+                      let result = expression.firstMatch(in: item, range: NSRange(item.startIndex..., in: item)),
+                      let valueRange = Range(result.range(at: 1), in: item) else { return nil }
+                return String(item[valueRange])
+            }
+
+            let typePattern = #"xsi:type="([^"]+)""#
+            let typeExpression = try? NSRegularExpression(pattern: typePattern, options: [])
+            let typeMatch = typeExpression?.firstMatch(in: item, range: NSRange(item.startIndex..., in: item))
+            let type = typeMatch.flatMap { Range($0.range(at: 1), in: item).map { String(item[$0]) } }
+            if let type {
+                let toolTypes = ["Axe", "Hoe", "Pickaxe", "WateringCan", "FishingRod", "MeleeWeapon", "Scythe", "Pan", "MilkPail", "Shears"]
+                if toolTypes.contains(type) {
+                    let name = value("DisplayName") ?? value("Name") ?? type
+                    return InventoryEntry(id: -1, name: name, quantity: 1, quality: 0)
+                }
+            }
+
+            guard let id = Int(value("parentSheetIndex") ?? ""),
+                  let name = value("Name") ?? value("name") else { return nil }
+            return InventoryEntry(
+                id: id,
+                name: name,
+                quantity: Int(value("Stack") ?? value("stack") ?? "1") ?? 1,
+                quality: Int(value("quality") ?? "0") ?? 0
+            )
+        }
+    }
+
+    private func addObjectItem(xml: String, id: Int, name: String, quantity: Int, quality: Int) -> String? {
+        let safeName = name.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+        let fragment = """
+        <Item xsi:type="Object"><isLostItem>false</isLostItem><category>-79</category><hasBeenInInventory>true</hasBeenInInventory><name>Object</name><ItemId>\(id)</ItemId><parentSheetIndex>\(id)</parentSheetIndex><specialItem>false</specialItem><SpecialVariable>0</SpecialVariable><DisplayName>\(safeName)</DisplayName><Name>\(safeName)</Name><Stack>\(quantity)</Stack><tileLocation><X>0</X><Y>0</Y></tileLocation><owner>0</owner><type>Basic</type><canBeSetDown>true</canBeSetDown><canBeGrabbed>true</canBeGrabbed><isHoedirt>false</isHoedirt><isSpawnedObject>false</isSpawnedObject><questItem>false</questItem><questId>0</questId><isOn>true</isOn><fragility>0</fragility><price>0</price><edibility>-300</edibility><stack>\(quantity)</stack><quality>\(quality)</quality><bigCraftable>false</bigCraftable><setOutdoors>false</setOutdoors><setIndoors>false</setIndoors><readyForHarvest>false</readyForHarvest><showNextIndex>false</showNextIndex><flipped>false</flipped><hasBeenPickedUpByFarmer>true</hasBeenPickedUpByFarmer><isRecipe>false</isRecipe><isLamp>false</isLamp><minutesUntilReady>0</minutesUntilReady></Item>
+        """
+        if let open = xml.range(of: "<items>"), let close = xml.range(of: "</items>", range: open.upperBound..<xml.endIndex) {
+            var updated = xml
+            updated.insert(contentsOf: fragment, at: close.lowerBound)
+            return updated
+        }
+        // Minimal/synthetic saves may not have an items collection yet.
+        guard let playerOpen = xml.range(of: "<player>"),
+              let playerClose = xml.range(of: "</player>", range: playerOpen.upperBound..<xml.endIndex) else { return nil }
+        var updated = xml
+        updated.insert(contentsOf: "<items>\(fragment)</items>", at: playerClose.lowerBound)
+        return updated
+    }
+
+    private func removeInventoryItem(xml: String, index: Int) -> String? {
+        guard let playerContents = xmlElementContents(tag: "player", in: xml),
+              let itemsRange = xmlElementContents(tag: "items", in: xml, within: playerContents) else { return nil }
+        let body = String(xml[itemsRange])
+        let pattern = #"<Item(?:\s+[^>]*)?>.*?</Item>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return nil }
+        let ordinaryMatches = regex.matches(in: body, range: NSRange(body.startIndex..., in: body)).filter { match in
+            guard let range = Range(match.range, in: body) else { return false }
+            let itemXML = String(body[range])
+            return !itemXML.contains("xsi:type=\"Axe\"") &&
+                   !itemXML.contains("xsi:type=\"Hoe\"") &&
+                   !itemXML.contains("xsi:type=\"Pickaxe\"") &&
+                   !itemXML.contains("xsi:type=\"WateringCan\"") &&
+                   !itemXML.contains("xsi:type=\"FishingRod\"") &&
+                   !itemXML.contains("xsi:type=\"MeleeWeapon\"") &&
+                   !itemXML.contains("xsi:type=\"Scythe\"") &&
+                   !itemXML.contains("xsi:type=\"Pan\"") &&
+                   !itemXML.contains("xsi:type=\"MilkPail\"") &&
+                   !itemXML.contains("xsi:type=\"Shears\"")
+        }
+        guard ordinaryMatches.indices.contains(index),
+              let range = Range(ordinaryMatches[index].range, in: body) else { return nil }
+        var updatedBody = body
+        updatedBody.removeSubrange(range)
+        var updated = xml
+        updated.replaceSubrange(itemsRange, with: updatedBody)
+        return updated
+    }
+
+    private func xmlTagValues(_ xml: String, tag: String) -> [String] {
+        if tag == "experiencePoints" {
+            let wrapper = "<\\s*experiencePoints(?:\\s[^>]*)?>(.*?)</\\s*experiencePoints\\s*>"
+            guard let outer = try? NSRegularExpression(pattern: wrapper, options: [.dotMatchesLineSeparators]),
+                  let match = outer.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)),
+                  let innerRange = Range(match.range(at: 1), in: xml) else { return [] }
+            let inner = String(xml[innerRange])
+            let ints = try? NSRegularExpression(pattern: "<\\s*int(?:\\s[^>]*)?>(.*?)</\\s*int\\s*>", options: [.dotMatchesLineSeparators])
+            return (ints?.matches(in: inner, range: NSRange(inner.startIndex..., in: inner)) ?? []).compactMap { item in
+                guard let valueRange = Range(item.range(at: 1), in: inner) else { return nil }
+                return String(inner[valueRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        let escaped = NSRegularExpression.escapedPattern(for: tag)
+        let pattern = "<\\s*" + escaped + "(?:\\s[^>]*)?>(.*?)</\\s*" + escaped + "\\s*>"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return [] }
+        let range = NSRange(xml.startIndex..., in: xml)
+        return regex.matches(in: xml, range: range).compactMap { match in
+            guard let valueRange = Range(match.range(at: 1), in: xml) else { return nil }
+            let value = String(xml[valueRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            // Only expose scalar nodes, not nested XML fragments.
+            guard !value.contains("<"), !value.contains(">") else { return nil }
+            return value
+        }
+    }
+
+    private func xmlValue(_ xml: String, tag: String) -> String? {
+        let pattern = "<\\s*" + NSRegularExpression.escapedPattern(for: tag) + "(?:\\s[^>]*)?>(.*?)</\\s*" + NSRegularExpression.escapedPattern(for: tag) + "\\s*>"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]), let match = regex.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)), let range = Range(match.range(at: 1), in: xml) else { return nil }
+        return String(xml[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func applyFields() {
+        guard let data = saveData, var xml = String(data: data, encoding: .utf8) else { return }
+
+        for (fieldKey, field) in fields {
+            guard let rawValue = field.text, !rawValue.isEmpty else { continue }
+            let parts = fieldKey.split(separator: "#", omittingEmptySubsequences: false)
+            guard parts.count == 2, let occurrence = Int(parts[1]) else { continue }
+            let tag = String(parts[0])
+            let numericTags = ["health","maxHealth","stamina","maxStamina","money","qiGems","goldenWalnuts","dayOfMonth","year","daysPlayed","whichFarm","Stack","quality","category","int","Points","age","friendshipTowardFarmer","happiness","fullness","toolUpgradeLevel","currentToolIndex"]
+            let value: String
+            if numericTags.contains(tag) {
+                guard let number = Int(rawValue), number >= 0 else {
+                    showAlert("Invalid Value", "\(tag) must be a non-negative whole number.")
+                    return
+                }
+                value = String(number)
+            } else {
+                value = rawValue
+            }
+
+            if tag == "experiencePoints" {
+                let wrapperPattern = "(<\\s*experiencePoints(?:\\s[^>]*)?>)(.*?)(</\\s*experiencePoints\\s*>)"
+                guard let wrapperRegex = try? NSRegularExpression(pattern: wrapperPattern, options: [.dotMatchesLineSeparators]),
+                      let wrapperMatch = wrapperRegex.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)),
+                      let wrapperFull = Range(wrapperMatch.range, in: xml),
+                      let wrapperOpen = Range(wrapperMatch.range(at: 1), in: xml),
+                      let wrapperInner = Range(wrapperMatch.range(at: 2), in: xml),
+                      let wrapperClose = Range(wrapperMatch.range(at: 3), in: xml) else { continue }
+                var inner = String(xml[wrapperInner])
+                let intPattern = "(<\\s*int(?:\\s[^>]*)?>)(.*?)(</\\s*int\\s*>)"
+                guard let intRegex = try? NSRegularExpression(pattern: intPattern, options: [.dotMatchesLineSeparators]) else { continue }
+                let intMatches = intRegex.matches(in: inner, range: NSRange(inner.startIndex..., in: inner))
+                guard intMatches.indices.contains(occurrence),
+                      let intFull = Range(intMatches[occurrence].range, in: inner),
+                      let intOpen = Range(intMatches[occurrence].range(at: 1), in: inner),
+                      let intClose = Range(intMatches[occurrence].range(at: 3), in: inner),
+                      Int(value) != nil else { continue }
+                inner.replaceSubrange(intFull, with: String(inner[intOpen]) + value + String(inner[intClose]))
+                xml.replaceSubrange(wrapperFull, with: String(xml[wrapperOpen]) + inner + String(xml[wrapperClose]))
+                continue
+            }
+
+            let escaped = NSRegularExpression.escapedPattern(for: tag)
+            let pattern = "(<\\s*" + escaped + "(?:\\s[^>]*)?>)(.*?)(</\\s*" + escaped + "\\s*>)"
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { continue }
+            let range = NSRange(xml.startIndex..., in: xml)
+            let matches = regex.matches(in: xml, range: range)
+            guard matches.indices.contains(occurrence),
+                  let full = Range(matches[occurrence].range, in: xml),
+                  let open = Range(matches[occurrence].range(at: 1), in: xml),
+                  let close = Range(matches[occurrence].range(at: 3), in: xml) else { continue }
+
+            // Avoid replacing nested XML elements; only scalar values are editable.
+            let replacement = String(xml[open]) + value + String(xml[close])
+            xml.replaceSubrange(full, with: replacement)
+        }
+
+        saveData = xml.data(using: .utf8)
+        showAlert("Changes Saved", "Your working copy has been updated. Export to create the edited farm copy.")
+    }
+
+    private func locateSave() -> URL? {
+        let root = AppFileStore.importedDirectory.appendingPathComponent("Stardew Valley", isDirectory: true)
+        guard let e = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey], options: [.skipsHiddenFiles]) else { return nil }
+        var candidates: [URL] = []
+        while let u = e.nextObject() as? URL {
+            if u.lastPathComponent == "SaveGameInfo" { continue }
+            if u.pathExtension.isEmpty, let d = try? Data(contentsOf: u), (try? StardewSaveParser.parse(data: d, filename: u.lastPathComponent)) != nil { candidates.append(u) }
+        }
+        func modificationDate(_ url: URL) -> Date {
+            return (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+        }
+        return candidates.sorted { modificationDate($0) > modificationDate($1) }.first
+    }
+
+    private func exportSave() {
+        guard let data = saveData, let source = saveURL else { showAlert("No Save Loaded", "Import a Stardew Valley save first."); return }
+        do {
+            let fm = FileManager.default; let stamp = Int(Date().timeIntervalSince1970)
+            let output = AppFileStore.documentsDirectory.appendingPathComponent("Stardew Valley Edited-\(stamp)", isDirectory: true)
+            try fm.createDirectory(at: output, withIntermediateDirectories: true)
+            if let folder = source.deletingLastPathComponent() as URL?, folder.lastPathComponent != "Stardew Valley", (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                let destinationFolder = output.appendingPathComponent(folder.lastPathComponent, isDirectory: true)
+                try fm.copyItem(at: folder, to: destinationFolder)
+                try data.write(to: destinationFolder.appendingPathComponent(source.lastPathComponent), options: .atomic)
+            } else {
+                try data.write(to: output.appendingPathComponent(source.lastPathComponent), options: .atomic)
+            }
+            showAlert("Export Complete", "Edited save copy created in Documents/\(output.lastPathComponent). Your imported original was not changed.")
+        } catch { showAlert("Export Failed", error.localizedDescription) }
+    }
+
+    // Fallout-style native selection menu. UIAlertController action sheets scroll
+    // automatically when the list is longer than the available screen height.
+    private func presentScrollMenu(title: String, options: [String], onSelect: @escaping (Int) -> Void) {
+        guard !options.isEmpty else {
+            showAlert("Nothing to Select", "No matching entries were found in this imported save.")
+            return
+        }
+        let menu = UIAlertController(title: title, message: "Scroll and tap an entry to select it.", preferredStyle: .actionSheet)
+        for (index, option) in options.enumerated() {
+            menu.addAction(UIAlertAction(title: option, style: .default) { _ in onSelect(index) })
+        }
+        menu.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = menu.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY - 40, width: 1, height: 1)
+        }
+        present(menu, animated: true)
+    }
+
+    private func friendshipNames(in xml: String) -> [String] {
+        guard let open = xml.range(of: "<friendshipData>"),
+              let close = xml.range(of: "</friendshipData>", range: open.upperBound..<xml.endIndex) else { return [] }
+        let body = String(xml[open.upperBound..<close.lowerBound])
+        let pattern = "<key>\\s*<string>(.*?)</string>\\s*</key>"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return [] }
+        let names = regex.matches(in: body, range: NSRange(body.startIndex..., in: body)).compactMap { match -> String? in
+            guard let range = Range(match.range(at: 1), in: body) else { return nil }
+            return String(body[range])
+                .replacingOccurrences(of: "&amp;", with: "&")
+                .replacingOccurrences(of: "&lt;", with: "<")
+                .replacingOccurrences(of: "&gt;", with: ">")
+        }
+        return Array(Set(names)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private func showAlert(_ titleText: String, _ message: String) {
+        let a = UIAlertController(title: titleText, message: message, preferredStyle: .alert); a.addAction(UIAlertAction(title: "OK", style: .default)); present(a, animated: true)
     }
 }
 
@@ -646,6 +1969,60 @@ private struct AnimatedWebMedia: UIViewRepresentable {
     }
 }
 
+
+// MARK: - Stardew-only save file importer
+private enum StardewFileImportLauncher {
+    static func presentPicker() {
+        guard let presenter = UIApplication.shared.topMostViewController else { return }
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)
+        let delegate = StardewFilePickerDelegate()
+        StardewFilePickerDelegate.activeDelegate = delegate
+        delegate.presenter = presenter
+        picker.delegate = delegate
+        picker.allowsMultipleSelection = false
+        picker.modalPresentationStyle = .formSheet
+        presenter.present(picker, animated: true)
+    }
+}
+
+private final class StardewFilePickerDelegate: NSObject, UIDocumentPickerDelegate {
+    static var activeDelegate: StardewFilePickerDelegate?
+    weak var presenter: UIViewController?
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        Self.activeDelegate = nil
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first, let presenter else { Self.activeDelegate = nil; return }
+        let hasAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if hasAccess { url.stopAccessingSecurityScopedResource() }
+            Self.activeDelegate = nil
+        }
+        do {
+            let data = try Data(contentsOf: url)
+            let summary = try StardewSaveParser.parse(data: data, filename: url.lastPathComponent)
+            let stored = try StardewSaveStore.shared.importSaveFile(url)
+            let alert = UIAlertController(
+                title: "STARDEW VALLEY SAVE IMPORTED",
+                message: summary.importSummary + "\n\nWorking copy: \(stored.lastPathComponent)\n\nOpen a Stardew editor section to edit this farm.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            presenter.present(alert, animated: true)
+        } catch {
+            let alert = UIAlertController(
+                title: "STARDEW IMPORT FAILED",
+                message: "Choose the extracted main Stardew farm save file (the extensionless XML file).\n\n\(error.localizedDescription)",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            presenter.present(alert, animated: true)
+        }
+    }
+}
+
 // MARK: - Load a previously imported Fallout Shelter save from app storage
 
 private enum StoredVaultSaveLoader {
@@ -757,13 +2134,7 @@ private final class ImportPickerViewController: UIViewController, UIDocumentPick
     }
 
     private func presentFilesPicker() {
-        // Request a local copy from Files providers. This avoids relying on
-        // in-place document access, which can prevent some providers from handing
-        // the selected save back to embedded UIKit hosts such as Nyxian.
-        let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [UTType.data],
-            asCopy: true
-        )
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)
         picker.delegate = self
         picker.allowsMultipleSelection = false
         picker.modalPresentationStyle = .formSheet
@@ -796,6 +2167,17 @@ private final class ImportPickerViewController: UIViewController, UIDocumentPick
             )
 
             switch detected {
+            case .stardewValley(let summary):
+                do {
+                    let backupURL = try StardewSaveStore.shared.importSaveFile(url)
+                    showResult(
+                        title: "STARDEW VALLEY SAVE IMPORTED",
+                        message: summary.importSummary + "\n\nA working copy was saved in SAVEFORGE's Imported Files folder.\n\nOriginal file: \(url.lastPathComponent)\nStored copy: \(backupURL.lastPathComponent)"
+                    )
+                } catch {
+                    showResult(title: "STARDEW IMPORT FAILED", message: error.localizedDescription)
+                }
+
             case .falloutShelter(let decoded):
                 let store = FSSEStore.shared
                 store.save = decoded
@@ -834,6 +2216,20 @@ private final class ImportPickerViewController: UIViewController, UIDocumentPick
         }
     }
 
+    private func importStardewFolder(_ folderURL: URL) throws {
+        let candidates = try StardewSaveStore.shared.findMainSaveFile(in: folderURL)
+        guard let mainSave = candidates.first else {
+            throw StardewSaveError.invalidSaveFolder("No valid Stardew Valley main save was found in this folder. Select the folder named FarmName_<ID> that contains the matching farm save file and SaveGameInfo.")
+        }
+        let data = try Data(contentsOf: mainSave)
+        let summary = try StardewSaveParser.parse(data: data, filename: mainSave.lastPathComponent)
+        let storedFolder = try StardewSaveStore.shared.importSaveFolder(folderURL)
+        showResult(
+            title: "STARDEW VALLEY SAVE IMPORTED",
+            message: summary.importSummary + "\n\nThe complete save folder was copied into SAVEFORGE's Imported Files folder.\n\nFolder: \(folderURL.lastPathComponent)\nStored copy: \(storedFolder.lastPathComponent)"
+        )
+    }
+
     private func showResult(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
@@ -853,6 +2249,7 @@ private final class ImportPickerViewController: UIViewController, UIDocumentPick
 
 private enum DetectedSaveEngine {
     case falloutShelter([String: Any])
+    case stardewValley(StardewSaveSummary)
     case recognizedButUnavailable(String)
     case unknown
 }
@@ -869,10 +2266,17 @@ private enum SaveEngineDetector {
         // are conservative format hints only; their game engines must exist before editing.
         let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
         let lowerName = filename.lowercased()
-        if ext == "plr" || lowerName.contains("stardew") {
-            return .recognizedButUnavailable("Stardew Valley")
+        let xmlPrefix = String(decoding: data.prefix(4096), as: UTF8.self)
+        let looksLikeSaveXML = xmlPrefix.contains("<SaveGame")
+        if lowerName.contains("stardew") || looksLikeSaveXML {
+            if let summary = try? StardewSaveParser.parse(data: data, filename: filename) {
+                return .stardewValley(summary)
+            }
+            if lowerName.contains("stardew") {
+                return .recognizedButUnavailable("Stardew Valley (unrecognized save structure)")
+            }
         }
-        if ext == "wld" || ext == "twld" || lowerName.contains("terraria") {
+        if ext == "wld" || ext == "twld" || ext == "plr" || lowerName.contains("terraria") {
             return .recognizedButUnavailable("Terraria")
         }
         if lowerName == "level.dat" || lowerName.contains("minecraft") || ext == "mcworld" {
@@ -896,6 +2300,7 @@ private struct RecentScreen: View {
             ZStack {
                 SF.background.ignoresSafeArea()
                 ScrollView {
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
                     VStack(alignment: .leading, spacing: 14) {
                         SectionLabel(title: "RECENTLY OPENED", detail: "NEWEST FIRST")
                         let games = GameInfo.all.filter { AppLibraryStore.shared.recentIDs.contains($0.id) }.sorted { a, b in
@@ -905,10 +2310,11 @@ private struct RecentScreen: View {
                             EmptyLibraryState(title: "NO RECENT GAMES", detail: "Games you open will appear here.", symbol: "clock")
                         } else {
                             ForEach(games) { game in
-                                NavigationLink { GameEditorScreen(game: game) } label: { GameCard(game: game) }.buttonStyle(.plain)
+                                NavigationLink { GameDestination(game: game) } label: { GameCard(game: game) }.buttonStyle(.plain)
                             }
                         }
                     }.padding(16)
+                    }
                 }
             }.navigationTitle("Recent").toolbarColorScheme(.dark, for: .navigationBar)
         }
@@ -921,6 +2327,7 @@ private struct FavoritesScreen: View {
             ZStack {
                 SF.background.ignoresSafeArea()
                 ScrollView {
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
                     VStack(alignment: .leading, spacing: 14) {
                         SectionLabel(title: "YOUR FAVORITES", detail: "PINNED GAMES")
                         let games = GameInfo.all.filter { AppLibraryStore.shared.favoriteIDs.contains($0.id) }
@@ -928,10 +2335,11 @@ private struct FavoritesScreen: View {
                             EmptyLibraryState(title: "NO FAVORITES YET", detail: "Open a game and tap the star to pin it here.", symbol: "star")
                         } else {
                             ForEach(games) { game in
-                                NavigationLink { GameEditorScreen(game: game) } label: { GameCard(game: game) }.buttonStyle(.plain)
+                                NavigationLink { GameDestination(game: game) } label: { GameCard(game: game) }.buttonStyle(.plain)
                             }
                         }
                     }.padding(16)
+                    }
                 }
             }.navigationTitle("Favorites").toolbarColorScheme(.dark, for: .navigationBar)
         }
@@ -990,7 +2398,7 @@ private struct SettingsScreen: View {
                         }.buttonStyle(.plain)
                         SettingLine(icon: "arrow.counterclockwise", title: "Backup policy", detail: "Original files remain unchanged")
                         SettingLine(icon: "checkmark.shield", title: "Save validation", detail: "Game-specific checks enabled where supported")
-                        SectionLabel(title: "APPLICATION", detail: "V0.1.2")
+                        SectionLabel(title: "APPLICATION", detail: "V0.1.3")
                         NavigationLink { SaveforgeCreditsScreen() } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "info.circle.fill").foregroundStyle(SF.gold).frame(width: 25)
@@ -1001,7 +2409,7 @@ private struct SettingsScreen: View {
                                 Spacer(); Image(systemName: "chevron.right").foregroundStyle(SF.gold)
                             }.padding(13).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 12))
                         }.buttonStyle(.plain)
-                        SettingLine(icon: "app", title: "Version", detail: "0.1.2")
+                        SettingLine(icon: "app", title: "Version", detail: "0.1.3")
                         SettingLine(icon: "iphone", title: "Platform", detail: "iOS and iPadOS")
                         SettingLine(icon: "wifi.slash", title: "Connectivity", detail: "Designed for offline use")
                     }.padding(18)
@@ -1089,7 +2497,10 @@ private struct StorageCleanupScreen: View {
                     Text("STORAGE CLEANUP").font(.system(size: 23, weight: .black, design: .rounded)).foregroundStyle(SF.text)
                     Text("Choose what to remove. Each action asks for confirmation before deleting anything.")
                         .font(.system(size: 11)).foregroundStyle(SF.secondary)
-                    cleanupButton(title: "Clear Downloaded JSON Catalogs", detail: "Removes offline Fallout Shelter dependencies. You can download them again.", symbol: "doc.zipper", destructive: true) {
+                    cleanupButton(title: "Clear Stardew Game Data", detail: "Removes downloaded Stardew JSON catalogs and the active Stardew working copy. Imported backup files are preserved.", symbol: "leaf.circle", destructive: true) {
+                        StorageCleanup.removeStardewData()
+                    }
+                    cleanupButton(title: "Clear Fallout Shelter Dependencies", detail: "Removes downloaded Fallout Shelter dependency files. You can download them again.", symbol: "doc.zipper", destructive: true) {
                         StorageCleanup.removeDownloadedCatalogs()
                     }
                     cleanupButton(title: "Clear Temporary Exports", detail: "Removes temporary files created during export. Imported backups are preserved.", symbol: "arrow.up.doc", destructive: true) {
@@ -1132,18 +2543,96 @@ private enum StorageCleanup {
         alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in action() })
         presenter.topPresentedViewController.present(alert, animated: true)
     }
+
+    static func showError(_ title: String, message: String) {
+        guard let presenter = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?.rootViewController else { return }
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        presenter.topPresentedViewController.present(alert, animated: true)
+    }
+
+    static func folderSize(_ folder: URL) -> String {
+        let enumerator = FileManager.default.enumerator(
+            at: folder,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        )
+        var total: Int64 = 0
+        while let item = enumerator?.nextObject() as? URL {
+            let values = try? item.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            if values?.isRegularFile == true {
+                total += Int64(values?.fileSize ?? 0)
+            }
+        }
+        return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+    }
+
+    static func removeStardewData() {
+        // Stardew JSON catalogs are stored inside Documents/SAVEFORGE.
+        // Remove only the Stardew catalog subfolder; preserve other SAVEFORGE data
+        // and Imported Files.
+        let catalogFolder = AppFileStore.documentsDirectory
+            .appendingPathComponent("SAVEFORGE", isDirectory: true)
+            .appendingPathComponent("StardewCatalog", isDirectory: true)
+        try? FileManager.default.removeItem(at: catalogFolder)
+
+        // Clear the editor's in-memory working copy so it cannot silently
+        // repopulate the editor after the on-disk Stardew data is removed.
+        StardewEditorViewController.clearWorkingCopy()
+
+        // Remove only SAVEFORGE-created temporary Stardew exports.
+        let temp = FileManager.default.temporaryDirectory
+        let files = (try? FileManager.default.contentsOfDirectory(at: temp, includingPropertiesForKeys: nil)) ?? []
+        for file in files where file.lastPathComponent.hasPrefix("SAVEFORGE-Stardew-") {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
     static func removeDownloadedCatalogs() {
         let folder = AppFileStore.documentsDirectory.appendingPathComponent("SAVEFORGE/VaultDependencies", isDirectory: true)
         try? FileManager.default.removeItem(at: folder)
     }
     static func removeTemporaryExports() {
-        let folder = FileManager.default.temporaryDirectory
-        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        for file in files where file.lastPathComponent.hasPrefix("SAVEFORGE-") { try? FileManager.default.removeItem(at: file) }
+        let fm = FileManager.default
+
+        // Remove every SAVEFORGE-generated temporary export, including Fallout
+        // Shelter and Stardew files, regardless of their game-specific suffix.
+        let tempFolder = fm.temporaryDirectory
+        let tempFiles = (try? fm.contentsOfDirectory(
+            at: tempFolder,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        for file in tempFiles where file.lastPathComponent.hasPrefix("SAVEFORGE-") {
+            do { try fm.removeItem(at: file) }
+            catch { showError("Could Not Delete Export", message: "\(file.lastPathComponent): \(error.localizedDescription)") }
+        }
+
+        // Also clear an app-managed Exports folder if one exists in SAVEFORGE storage.
+        let storedExports = AppFileStore.documentsDirectory
+            .appendingPathComponent("SAVEFORGE", isDirectory: true)
+            .appendingPathComponent("Exports", isDirectory: true)
+        if fm.fileExists(atPath: storedExports.path) {
+            for file in AppFileStore.files(in: storedExports) {
+                do { try fm.removeItem(at: file) }
+                catch { showError("Could Not Delete Export", message: "\(file.lastPathComponent): \(error.localizedDescription)") }
+            }
+        }
     }
+
     static func removeImportedBackups() {
+        let fm = FileManager.default
         let folder = AppFileStore.importedDirectory
-        for file in AppFileStore.files(in: folder) { try? FileManager.default.removeItem(at: file) }
+
+        // Remove every imported file and folder, including nested Stardew farm
+        // folders, while keeping the Imported Files directory itself available.
+        for file in AppFileStore.files(in: folder) {
+            do { try fm.removeItem(at: file) }
+            catch { showError("Could Not Delete Import", message: "\(file.lastPathComponent): \(error.localizedDescription)") }
+        }
     }
 }
 
@@ -1154,30 +2643,244 @@ private extension UIViewController {
 }
 
 private struct LocalFilesList: View {
-    let title: String; let directory: URL
+    let title: String
+    let directory: URL
+
+    private var files: [URL] {
+        AppFileStore.files(in: directory)
+    }
+
     var body: some View {
         ZStack {
             SF.background.ignoresSafeArea()
             List {
-                let files = AppFileStore.files(in: directory)
                 if files.isEmpty {
-                    Text("No files stored here yet.").foregroundStyle(SF.secondary).listRowBackground(SF.panel)
+                    Text("No files or folders stored here.")
+                        .foregroundStyle(SF.secondary)
+                        .listRowBackground(SF.panel)
                 } else {
                     ForEach(files, id: \.path) { file in
-                        ShareLink(item: file) {
-                            HStack(spacing: 10) {
-                                Image(systemName: file.hasDirectoryPath ? "folder.fill" : "doc.fill").foregroundStyle(SF.accent)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(file.lastPathComponent).font(.system(size: 12, weight: .semibold)).foregroundStyle(SF.text)
-                                    Text(AppFileStore.fileSize(file)).font(.system(size: 9, design: .monospaced)).foregroundStyle(SF.muted)
+                        HStack(spacing: 10) {
+                            if file.hasDirectoryPath {
+                                NavigationLink {
+                                    LocalFilesList(title: file.lastPathComponent, directory: file)
+                                } label: {
+                                    storageRow(file)
                                 }
-                                Spacer(); Image(systemName: "square.and.arrow.up").foregroundStyle(SF.gold)
+                                .listRowBackground(SF.panel)
+                            } else {
+                                ShareLink(item: file) {
+                                    storageRow(file)
+                                }
+                                .listRowBackground(SF.panel)
                             }
-                        }.listRowBackground(SF.panel)
+
+                            Button {
+                                StorageCleanup.confirm(
+                                    title: "Delete \(file.lastPathComponent)?",
+                                    message: file.hasDirectoryPath
+                                        ? "This permanently deletes this folder and everything stored inside it. Return to this folder after deletion to refresh the listing."
+                                        : "This permanently deletes this stored file. Return to this folder after deletion to refresh the listing."
+                                ) {
+                                    do {
+                                        try FileManager.default.removeItem(at: file)
+                                        StorageCleanup.showError(
+                                            "Deleted",
+                                            message: "\(file.lastPathComponent) was removed. Navigate back and reopen this folder to refresh its contents."
+                                        )
+                                    } catch {
+                                        StorageCleanup.showError("Could Not Delete", message: error.localizedDescription)
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(SF.gold)
+                                    .frame(width: 36, height: 36)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Delete \(file.lastPathComponent)")
+                        }
+                        .listRowBackground(SF.panel)
                     }
                 }
-            }.scrollContentBackground(.hidden)
-        }.navigationTitle(title).toolbarColorScheme(.dark, for: .navigationBar)
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .navigationTitle(title)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+    }
+
+    @ViewBuilder
+    private func storageRow(_ file: URL) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: file.hasDirectoryPath ? "folder.fill" : "doc.fill")
+                .foregroundStyle(SF.accent)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(file.lastPathComponent)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(SF.text)
+                    .lineLimit(1)
+                Text(file.hasDirectoryPath ? "Folder · \(StorageCleanup.folderSize(file))" : AppFileStore.fileSize(file))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(SF.muted)
+            }
+            Spacer()
+            if file.hasDirectoryPath {
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(SF.gold)
+            } else {
+                Image(systemName: "square.and.arrow.up")
+                    .foregroundStyle(SF.gold)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Stardew Valley save import engine (iOS + PC XML saves)
+
+private enum StardewSaveError: LocalizedError {
+    case invalidXML(String)
+    case invalidSaveFolder(String)
+    case copyFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidXML(let message), .invalidSaveFolder(let message), .copyFailed(let message): return message
+        }
+    }
+}
+
+private struct StardewSaveSummary {
+    let farmerName: String
+    let farmName: String
+    let money: String
+    let saveID: String
+    let sourceFileName: String
+
+    var importSummary: String {
+        "Farmer: \(farmerName)\nFarm: \(farmName)\nMoney: \(money)g\nSave ID: \(saveID.isEmpty ? "Not found" : saveID)\nSave file: \(sourceFileName)"
+    }
+}
+
+private final class StardewXMLReader: NSObject, XMLParserDelegate {
+    private var elementStack: [String] = []
+    private var currentText = ""
+    private(set) var values: [String: String] = [:]
+    private(set) var rootElement = ""
+    private(set) var foundPlayer = false
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+        if elementStack.isEmpty { rootElement = elementName }
+        elementStack.append(elementName)
+        if elementName == "player" { foundPlayer = true }
+        currentText = ""
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        currentText += string
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+        let value = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty {
+            let path = elementStack.joined(separator: ".")
+            values[path] = value
+            // Also keep the last occurrence of a leaf key as a conservative fallback.
+            values["$" + elementName] = value
+        }
+        if !elementStack.isEmpty { elementStack.removeLast() }
+        currentText = ""
+    }
+}
+
+private enum StardewSaveParser {
+    static func parse(data: Data, filename: String) throws -> StardewSaveSummary {
+        guard !data.isEmpty else { throw StardewSaveError.invalidXML("The selected file is empty.") }
+        let reader = StardewXMLReader()
+        let parser = XMLParser(data: data)
+        parser.delegate = reader
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse(), reader.rootElement == "SaveGame", reader.foundPlayer else {
+            let detail = parser.parserError?.localizedDescription ?? "The XML root or player record was not recognized."
+            throw StardewSaveError.invalidXML("This file is not a supported Stardew Valley farm save. \(detail)")
+        }
+
+        func value(_ paths: [String], fallback: String) -> String {
+            for path in paths {
+                if let found = reader.values[path], !found.isEmpty { return found }
+            }
+            return fallback
+        }
+
+        let farmer = value(["SaveGame.player.name", "player.name", "$name"], fallback: "Unknown Farmer")
+        let farm = value(["SaveGame.player.farmName", "player.farmName", "$farmName"], fallback: "Unknown Farm")
+        let money = value(["SaveGame.player.money", "player.money", "$money"], fallback: "0")
+        let saveID = value(["SaveGame.uniqueIDForThisGame", "uniqueIDForThisGame", "$uniqueIDForThisGame"], fallback: "")
+        return StardewSaveSummary(farmerName: farmer, farmName: farm, money: money, saveID: saveID, sourceFileName: filename)
+    }
+}
+
+private final class StardewSaveStore {
+    static let shared = StardewSaveStore()
+    private init() {}
+
+    func findMainSaveFile(in folder: URL) throws -> [URL] {
+        let fm = FileManager.default
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey]
+        guard let enumerator = fm.enumerator(at: folder, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
+            throw StardewSaveError.invalidSaveFolder("SAVEFORGE could not read the selected folder.")
+        }
+        var files: [URL] = []
+        while let item = enumerator.nextObject() as? URL {
+            let values = try? item.resourceValues(forKeys: Set(keys))
+            guard values?.isRegularFile == true else { continue }
+            // Stardew's primary save file has no extension and shares its name with
+            // the containing FarmName_<uniqueID> directory.
+            if item.pathExtension.isEmpty && item.lastPathComponent == folder.lastPathComponent {
+                files.insert(item, at: 0)
+            } else if item.lastPathComponent == "SaveGameInfo" {
+                continue
+            }
+        }
+        if files.isEmpty {
+            // Some Files providers wrap the selected directory in an extra folder.
+            // Look for a unique extensionless XML save whose root is SaveGame.
+            let allFiles = (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles])) ?? []
+            for file in allFiles where file.pathExtension.isEmpty && file.lastPathComponent != "SaveGameInfo" {
+                if let data = try? Data(contentsOf: file), (try? StardewSaveParser.parse(data: data, filename: file.lastPathComponent)) != nil {
+                    files.append(file)
+                }
+            }
+        }
+        return files
+    }
+
+    func importSaveFile(_ source: URL) throws -> URL {
+        let destinationDirectory = AppFileStore.importedDirectory.appendingPathComponent("Stardew Valley", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+        var destination = destinationDirectory.appendingPathComponent(source.lastPathComponent)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            destination = destinationDirectory.appendingPathComponent("\(source.deletingPathExtension().lastPathComponent)-\(Int(Date().timeIntervalSince1970))")
+        }
+        do { try FileManager.default.copyItem(at: source, to: destination) }
+        catch { throw StardewSaveError.copyFailed("The save was recognized, but SAVEFORGE could not create a working copy: \(error.localizedDescription)") }
+        return destination
+    }
+
+    func importSaveFolder(_ source: URL) throws -> URL {
+        let destinationDirectory = AppFileStore.importedDirectory.appendingPathComponent("Stardew Valley", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+        var destination = destinationDirectory.appendingPathComponent(source.lastPathComponent, isDirectory: true)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            destination = destinationDirectory.appendingPathComponent("\(source.lastPathComponent)-\(Int(Date().timeIntervalSince1970))", isDirectory: true)
+        }
+        do { try FileManager.default.copyItem(at: source, to: destination) }
+        catch { throw StardewSaveError.copyFailed("SAVEFORGE could not copy the selected farm folder: \(error.localizedDescription)") }
+        return destination
     }
 }
 
@@ -1279,7 +2982,7 @@ private struct GameInfo: Identifiable {
     var statusTitle: String {
         switch id {
         case "fallout": return "EDITOR READY"
-        case "stardew": return "COMING SOON"
+        case "stardew": return "EDITOR READY"
         case "terraria": return "COMING SOON"
         case "minecraft": return "COMING SOON"
         case "theotown": return "COMING SOON"
@@ -1291,7 +2994,7 @@ private struct GameInfo: Identifiable {
     var statusColor: Color {
         switch id {
         case "fallout": return SF.steelBlue
-        case "stardew": return SF.bronze
+        case "stardew": return SF.steelBlue
         case "terraria": return SF.bronze
         case "minecraft": return SF.bronze
         case "theotown": return SF.bronze
@@ -1365,10 +3068,15 @@ private struct GameInfo: Identifiable {
             panel: Color(red: 0.19, green: 0.135, blue: 0.085),
             border: Color(red: 0.34, green: 0.24, blue: 0.15),
             modules: [
-                EditorModule(title: "Farm & Player", detail: "Farm identity and player information", symbol: "leaf"),
-                EditorModule(title: "Inventory", detail: "Items, quantities and equipment", symbol: "backpack"),
+                EditorModule(title: "Farmer", detail: "Name, health and stamina", symbol: "person.crop.circle"),
+                EditorModule(title: "Resources", detail: "Money and farm resources", symbol: "leaf"),
+                EditorModule(title: "Inventory", detail: "Items, quantities and carried objects", symbol: "backpack"),
                 EditorModule(title: "Skills", detail: "Skill levels and experience", symbol: "chart.bar"),
-                EditorModule(title: "Relationships", detail: "Friendship and social data", symbol: "heart")
+                EditorModule(title: "Relationships", detail: "Friendship and social data", symbol: "heart"),
+                EditorModule(title: "Farm", detail: "Farm identity and world data", symbol: "house"),
+                EditorModule(title: "Animals", detail: "Farm animals and pets", symbol: "pawprint"),
+                EditorModule(title: "Equipment", detail: "Tools and equipped items", symbol: "hammer"),
+                EditorModule(title: "Progress", detail: "Calendar and progression", symbol: "trophy")
             ]
         ),
         GameInfo(
@@ -1900,12 +3608,15 @@ final class FSSEDependencyCatalog {
     private let baseURL = "https://raw.githubusercontent.com/dneverson/fallout-shelter-save-editor/main/public/gamedata/"
     private let filenames = ["weapons.json", "outfits.json", "pets.json", "junk.json", "unique-dwellers.json"]
     private var folder: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("SAVEFORGE/VaultDependencies", isDirectory: true) }
+    // Cheap existence/size check: this runs once per second from a TimelineView, so it must
+    // not read or parse the catalogs. downloadAll only writes files that already parsed as JSON.
     var allDependenciesInstalled: Bool {
-        filenames.allSatisfy { file in
-            let url = folder.appendingPathComponent(file)
-            guard let data = try? Data(contentsOf: url), !data.isEmpty,
-                  (try? JSONSerialization.jsonObject(with: data)) != nil else { return false }
-            return true
+        let fm = FileManager.default
+        return filenames.allSatisfy { file in
+            let path = folder.appendingPathComponent(file).path
+            guard let attrs = try? fm.attributesOfItem(atPath: path),
+                  let size = attrs[.size] as? NSNumber else { return false }
+            return size.intValue > 0
         }
     }
     func downloadAll(completion: @escaping (Result<[String], Error>) -> Void) {
@@ -2473,10 +4184,20 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
         do {
             let data = try store.encrypt()
             let filename = store.originalFileName.isEmpty ? "Vault-Edited.sav" : store.originalFileName
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent("SAVEFORGE-" + filename)
+            let exportName = "SAVEFORGE-" + filename
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(exportName)
             try data.write(to: url, options: .atomic)
-            let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
-            present(picker, animated: true)
+            let notice = UIAlertController(
+                title: "Export Ready",
+                message: "This will be saved as \(exportName).\n\nThe SAVEFORGE- prefix keeps it from replacing your existing save. Before the game can use it, rename it to \(filename) (the slot you want to replace).",
+                preferredStyle: .alert
+            )
+            notice.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            notice.addAction(UIAlertAction(title: "Choose Location", style: .default) { [weak self] _ in
+                let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
+                self?.present(picker, animated: true)
+            })
+            present(notice, animated: true)
         } catch {
             showAlert(title: "Export Failed", message: error.localizedDescription)
         }
@@ -2725,7 +4446,11 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
         case .inventory:
             guard store.inventory.indices.contains(indexPath.row) else { return }
             let alert = UIAlertController(title: "Inventory Quantity", message: "Use + / − or set the total quantity. Each Add Item operation is limited to 20.", preferredStyle: .alert)
-            let current = 1
+            let tappedItem = store.inventory[indexPath.row]
+            let tappedID = "\(tappedItem["id"] ?? "")", tappedType = "\(tappedItem["type"] ?? "item")"
+            let current = store.inventory.filter {
+                "\($0["id"] ?? "")" == tappedID && "\($0["type"] ?? "item")" == tappedType
+            }.count
             alert.addTextField { field in field.text = "\(current)"; field.keyboardType = .numberPad; field.placeholder = "QTY" }
             alert.addAction(UIAlertAction(title: "−", style: .default) { _ in self.store.removeInventoryItem(index: indexPath.row); self.tableView.reloadData() })
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -2826,4 +4551,3 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
         present(alert, animated: true)
     }
 }
-
