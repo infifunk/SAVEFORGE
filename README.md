@@ -32,9 +32,9 @@ https://raw.githubusercontent.com/infifunk/SAVEFORGE/main/apps.json
 | **Game** | **Editor Status** |
 |----------|----------------|
 | Fallout Shelter | Editor Ready |
-| Stardew Valley | Coming Soon |
+| Stardew Valley | Ready (Beta) |
 | Terraria | Coming Soon |
-| Minecraft Bedrock | Coming Soon |
+| Minecraft Bedrock | Editor Ready |
 | TheoTown | Coming Soon |
 | WorldBox | Coming Soon |
 
