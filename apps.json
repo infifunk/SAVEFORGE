@@ -9,7 +9,7 @@
       "developerName": "InfiFunk",
       "subtitle": "Cyber Forge",
       "localizedDescription": "SAVEFORGE is an iOS game save editor built by InfiFunk.",
-      "iconURL": "https://raw.githubusercontent.com/infifunk/SAVEFORGE/main/AppIcon.png",
+      "iconURL": "https://raw.githubusercontent.com/infifunk/SAVEFORGE/main/Resources/AppIcon.png",
       "tintColor": "#00D9FF",
       "versions": [
         {
