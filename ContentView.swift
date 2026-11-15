@@ -1,16 +1,93 @@
-//
-// ContentView.swift
-// SAVEFORGE — Cyber Forge
-// v0.1.3
-//
 
 import SwiftUI
+import Combine
 import UniformTypeIdentifiers
 import UIKit
 import AVKit
 import WebKit
+import Compression
+
+// MARK: - App theme preferences
+
+private enum SFTheme: String, CaseIterable, Identifiable {
+    case cyberForge = "Cyber Forge"
+    case midnight = "Midnight"
+    case ember = "Ember"
+    case forest = "Forest"
+    var id: String { rawValue }
+    var description: String {
+        switch self {
+        case .cyberForge: return "Original cyan and gold SAVEFORGE look"
+        case .midnight: return "Cool blue accents with deep navy panels"
+        case .ember: return "Warm orange and bronze accents"
+        case .forest: return "Emerald accents with dark green panels"
+        }
+    }
+    var accent: Color {
+        switch self {
+        case .cyberForge: return Color(red: 0.12, green: 0.88, blue: 0.98)
+        case .midnight: return Color(red: 0.38, green: 0.63, blue: 1.00)
+        case .ember: return Color(red: 1.00, green: 0.48, blue: 0.20)
+        case .forest: return Color(red: 0.30, green: 0.82, blue: 0.55)
+        }
+    }
+    var gold: Color {
+        switch self {
+        case .cyberForge: return Color(red: 1.00, green: 0.70, blue: 0.22)
+        case .midnight: return Color(red: 0.65, green: 0.76, blue: 1.00)
+        case .ember: return Color(red: 1.00, green: 0.72, blue: 0.36)
+        case .forest: return Color(red: 0.76, green: 0.86, blue: 0.42)
+        }
+    }
+    var background: Color {
+        switch self {
+        case .cyberForge: return Color(red: 0.012, green: 0.020, blue: 0.026)
+        case .midnight: return Color(red: 0.012, green: 0.018, blue: 0.040)
+        case .ember: return Color(red: 0.035, green: 0.018, blue: 0.012)
+        case .forest: return Color(red: 0.012, green: 0.027, blue: 0.020)
+        }
+    }
+    var panel: Color {
+        switch self {
+        case .cyberForge: return Color(red: 0.035, green: 0.060, blue: 0.071)
+        case .midnight: return Color(red: 0.045, green: 0.060, blue: 0.105)
+        case .ember: return Color(red: 0.085, green: 0.047, blue: 0.030)
+        case .forest: return Color(red: 0.035, green: 0.075, blue: 0.052)
+        }
+    }
+    var artwork: Color {
+        switch self {
+        case .cyberForge: return Color(red: 0.018, green: 0.040, blue: 0.052)
+        case .midnight: return Color(red: 0.020, green: 0.032, blue: 0.070)
+        case .ember: return Color(red: 0.045, green: 0.025, blue: 0.018)
+        case .forest: return Color(red: 0.018, green: 0.045, blue: 0.030)
+        }
+    }
+    var border: Color { accent.opacity(0.34) }
+}
+
+private extension Notification.Name {
+    static let saveforgeThemeDidChange = Notification.Name("SAVEFORGEThemeDidChange")
+}
+
+private final class SFThemeManager: ObservableObject {
+    static let shared = SFThemeManager()
+    private let preferenceKey = "SAVEFORGE.SelectedTheme"
+    @Published var selectedTheme: SFTheme {
+        didSet {
+            UserDefaults.standard.set(selectedTheme.rawValue, forKey: preferenceKey)
+            NotificationCenter.default.post(name: .saveforgeThemeDidChange, object: selectedTheme)
+        }
+    }
+    private init() {
+        let saved = UserDefaults.standard.string(forKey: preferenceKey) ?? SFTheme.cyberForge.rawValue
+        selectedTheme = SFTheme(rawValue: saved) ?? .cyberForge
+    }
+}
 
 struct ContentView: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View {
         TabView {
             LibraryScreen()
@@ -44,9 +121,20 @@ struct ContentView: View {
     }
 }
 
+enum SAVEFORGEStartupSessionReset {
+    static func perform() {
+        MinecraftWorldImportStore.clearCurrentWorld()
+        StardewEditorViewController.clearWorkingCopy()
+        FSSEStore.shared.save = nil
+        FSSEStore.shared.originalFileName = "Vault.sav"
+    }
+}
+
 // MARK: - Library
 
 private struct LibraryScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -81,18 +169,13 @@ private struct LibraryScreen: View {
 
                         LazyVStack(spacing: 14) {
                             ForEach(GameInfo.all) { game in
-                                NavigationLink {
-                                    GameDestination(game: game)
-                                } label: {
-                                    GameCard(game: game)
-                                }
-                                .buttonStyle(.plain)
+                                GameCardTile(game: game)
                             }
                         }
 
                         HStack(spacing: 7) {
                             Image(systemName: "lock.shield")
-                            Text("LOCAL-FIRST • YOUR FILES STAY ON YOUR DEVICE • v0.1.3")
+                            Text("LOCAL-FIRST • YOUR FILES STAY ON YOUR DEVICE • v1.0.5")
                         }
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .tracking(0.5)
@@ -114,6 +197,8 @@ private struct LibraryScreen: View {
 }
 
 private struct ForgeHeader: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View {
         VStack(spacing: 9) {
             ZStack {
@@ -164,6 +249,8 @@ private struct ForgeHeader: View {
 // MARK: - Game card
 
 private struct GameCard: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let game: GameInfo
 
     var body: some View {
@@ -259,21 +346,50 @@ private struct GameCard: View {
                 )
         }
         .shadow(color: game.accent.opacity(0.13), radius: 11, y: 4)
-        .overlay(alignment: .topTrailing) {
+    }
+}
+
+private struct GameCardTile: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
+    let game: GameInfo
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            NavigationLink {
+                GameDestination(game: game)
+            } label: {
+                GameCard(game: game)
+                    .contentShape(RoundedRectangle(cornerRadius: 18))
+            }
+            .buttonStyle(.plain)
+            .contentShape(RoundedRectangle(cornerRadius: 18))
+
             TimelineView(.periodic(from: .now, by: 1)) { _ in
-                Button { AppLibraryStore.shared.toggleFavorite(game.id) } label: {
+                Button {
+                    AppLibraryStore.shared.toggleFavorite(game.id)
+                } label: {
                     Image(systemName: AppLibraryStore.shared.favoriteIDs.contains(game.id) ? "star.fill" : "star")
-                        .font(.system(size: 15, weight: .bold)).foregroundStyle(SF.gold)
-                        .frame(width: 38, height: 38).background(.black.opacity(0.76)).clipShape(Circle())
-                }.buttonStyle(.plain).padding(10)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SF.gold)
+                        .frame(width: 38, height: 38)
+                        .background(.black.opacity(0.76))
+                        .clipShape(Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(10)
             }
         }
+        .contentShape(RoundedRectangle(cornerRadius: 18))
     }
 }
 
 // MARK: - Game editor
 
 private struct GameEditorScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let game: GameInfo
 
     var body: some View {
@@ -424,6 +540,117 @@ private struct GameEditorScreen: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+                        } else if game.id == "minecraft" {
+                            Button {
+                                MinecraftWorldImportLauncher.presentPicker()
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "folder.badge.plus")
+                                        .font(.system(size: 18, weight: .bold))
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("IMPORT FROM MINECRAFT DIRECTORY")
+                                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                                        Text("Import a Minecraft world or world files")
+                                            .font(.system(size: 10)).foregroundStyle(SF.muted)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right").foregroundStyle(SF.farmGold)
+                                }
+                                .foregroundStyle(SF.farmGold).padding(14).background(game.panel)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(SF.farmGold.opacity(0.55), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                MinecraftCatalogManager.downloadAll { message in
+                                    DispatchQueue.main.async {
+                                        MinecraftCatalogBrowserModel.shared.load()
+                                        let alert = UIAlertController(title: "Minecraft Game Data", message: message, preferredStyle: .alert)
+                                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                                        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "arrow.down.circle.fill")
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("DOWNLOAD / UPDATE JSON CATALOGS")
+                                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                                        Text("Items · Enchantments · Blocks · Bedrock")
+                                            .font(.system(size: 10)).foregroundStyle(SF.muted)
+                                        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                                            let installed = MinecraftCatalogManager.installedCount
+                                            Text("\(installed)/3 INSTALLED · \(installed == 3 ? "READY OFFLINE" : "TAP TO REFRESH")")
+                                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                                .foregroundStyle(SF.farmGold.opacity(0.85))
+                                        }
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.down").foregroundStyle(SF.farmGold)
+                                }
+                                .foregroundStyle(SF.farmGold).padding(14).background(game.panel)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay { RoundedRectangle(cornerRadius: 14).stroke(SF.farmGold.opacity(0.45), lineWidth: 1) }
+                            }.buttonStyle(.plain)
+                            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                                let currentWorld = MinecraftWorldImportStore.currentWorldName
+                                HStack(spacing: 11) {
+                                    Image(systemName: "globe")
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundStyle(SF.farmGold)
+                                        .frame(width: 42, height: 42)
+                                        .background(SF.farmGold.opacity(0.12))
+                                        .clipShape(RoundedRectangle(cornerRadius: 11))
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("CURRENT WORLD")
+                                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                                            .foregroundStyle(SF.text)
+                                        Text(currentWorld ?? "No world imported")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundStyle(currentWorld == nil ? SF.muted : SF.farmGold)
+                                            .lineLimit(2)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Text(currentWorld == nil ? "EMPTY" : "LOADED")
+                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(currentWorld == nil ? SF.muted : SF.farmGold)
+                                }
+                                .padding(13).frame(maxWidth: .infinity, alignment: .leading)
+                                .background(game.panel).clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay { RoundedRectangle(cornerRadius: 14).stroke(SF.farmGold.opacity(0.35), lineWidth: 1) }
+                            }
+
+                            SectionLabel(title: "MINECRAFT EDITOR", detail: "WORLD TOOLS")
+                            ForEach(MinecraftEditorSection.all) { section in
+                                NavigationLink {
+                                    MinecraftEditorSectionScreen(section: section)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: section.symbol)
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundStyle(SF.farmGold)
+                                            .frame(width: 42, height: 42)
+                                            .background(SF.farmGold.opacity(0.12))
+                                            .clipShape(RoundedRectangle(cornerRadius: 11))
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(section.title.uppercased())
+                                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                                .foregroundStyle(SF.text)
+                                            Text(section.detail)
+                                                .font(.system(size: 10)).foregroundStyle(SF.muted)
+                                        }
+                                        Spacer()
+                                        Text(section.status)
+                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(section.ready ? SF.emerald : SF.muted)
+                                    }
+                                    .padding(13).frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(game.panel).clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .overlay { RoundedRectangle(cornerRadius: 14).stroke(SF.farmGold.opacity(0.32), lineWidth: 1) }
+                                }.buttonStyle(.plain)
+                            }
+
                         } else if game.id == "stardew" {
                             Button {
                                 StardewFileImportLauncher.presentPicker()
@@ -546,7 +773,7 @@ private struct GameEditorScreen: View {
                             }
                         }
 
-                        Text(game.id == "fallout" ? "IMPORT A VAULT.SAV, THEN OPEN A MODULE TO EDIT ITS DATA. EXPORT CREATES A SEPARATE COPY." : (game.id == "stardew" ? "IMPORT YOUR FARM SAVE, THEN OPEN A MODULE TO EDIT ITS DATA. EXPORT CREATES A SEPARATE COPY." : "This is a visual preview. Editing will be enabled after the game's save format and import/export workflow are implemented and tested."))
+                        Text(game.id == "fallout" ? "IMPORT A VAULT.SAV, THEN OPEN A MODULE TO EDIT ITS DATA. EXPORT CREATES A SEPARATE COPY." : (game.id == "stardew" ? "IMPORT YOUR FARM SAVE, THEN OPEN A MODULE TO EDIT ITS DATA. EXPORT CREATES A SEPARATE COPY." : (game.id == "minecraft" ? "IMPORT A BEDROCK WORLD, THEN OPEN A MINECRAFT EDITOR SECTION. UNSUPPORTED DATABASE WRITES REMAIN LOCKED UNTIL VALIDATED." : "This is a visual preview. Editing will be enabled after the game's save format and import/export workflow are implemented and tested.")))
                             .font(.system(size: 10))
                             .foregroundStyle(SF.muted)
                             .lineSpacing(3)
@@ -568,10 +795,13 @@ private struct GameEditorScreen: View {
 // MARK: - Game destinations
 
 private struct GameDestination: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let game: GameInfo
     var body: some View { GameEditorScreen(game: game) }
 }
 
+// MARK: - Stardew Valley editor
 private struct StardewEditorHost: UIViewControllerRepresentable {
     let sectionTitle: String
     func makeUIViewController(context: Context) -> StardewEditorViewController {
@@ -580,14 +810,13 @@ private struct StardewEditorHost: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: StardewEditorViewController, context: Context) {}
 }
 
+// MARK: - Stardew catalog manager
 private enum StardewCatalogManager {
     struct Result {
         let title: String
         let message: String
     }
 
-    // Public MIT-licensed Stardew Valley data package. Catalogs are reference data,
-    // not save files. The editor uses these IDs for item and content lookups.
     private static let version = "1.1.0"
     private static let files = [
         "crops", "trees", "animals", "forageables", "artisan-goods", "mixed-seeds", "seasons",
@@ -602,7 +831,6 @@ private enum StardewCatalogManager {
         "medical-supplies-shop", "bookseller-shop", "volcano-shop", "island-trader-shop"
     ]
 
-    // All downloaded JSON catalogs live inside the shared SAVEFORGE storage folder.
     static var directory: URL {
         AppFileStore.documentsDirectory
             .appendingPathComponent("SAVEFORGE", isDirectory: true)
@@ -625,9 +853,6 @@ private enum StardewCatalogManager {
         directory.appendingPathComponent(name + ".json")
     }
 
-    // Convert the downloaded reference datasets into selectable inventory entries.
-    // Only records with a numeric in-game object ID are offered to the legacy
-    // object-item writer; descriptive slug IDs are deliberately not guessed.
     static func inventoryCatalog() -> [(id: Int, name: String)] {
         let itemFiles = ["bait", "tackle", "minerals", "artifacts", "forageables", "fish", "artisan-goods", "weapons", "rings", "trinkets", "footwear", "hats"]
         var byID: [Int: String] = [:]
@@ -656,8 +881,6 @@ private enum StardewCatalogManager {
             visit(json)
         }
 
-        // The dedicated Stardew IDs dataset provides the actual vanilla object IDs
-        // and localized name map. Prefer its English display names for the picker.
         if let data = try? Data(contentsOf: localFile("objects")),
            let records = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
             for record in records {
@@ -770,7 +993,27 @@ private enum StardewCatalogManager {
     }
 }
 
+// MARK: - Stardew editor
 private final class StardewEditorViewController: UIViewController {
+    private var themeObserver: NSObjectProtocol?
+
+    private func observeThemeChanges() {
+        themeObserver = NotificationCenter.default.addObserver(
+            forName: .saveforgeThemeDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            SFUIKitThemeRefresh.apply(to: self)
+        }
+    }
+
+    deinit {
+        if let themeObserver = themeObserver {
+            NotificationCenter.default.removeObserver(themeObserver)
+        }
+    }
+
     private let initialSection: String
     init(initialSection: String) {
         self.initialSection = initialSection
@@ -778,13 +1021,11 @@ private final class StardewEditorViewController: UIViewController {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    private let brown = UIColor(red: 0.12, green: 0.085, blue: 0.055, alpha: 1)
-    private let panel = UIColor(red: 0.19, green: 0.135, blue: 0.085, alpha: 1)
-    private let gold = UIColor(red: 0.95, green: 0.68, blue: 0.25, alpha: 1)
+    private var brown: UIColor { SFUIKitTheme.background }
+    private var panel: UIColor { SFUIKitTheme.panel }
+    private var gold: UIColor { SFUIKitTheme.gold }
     private let textColor = UIColor(white: 0.96, alpha: 1)
-    private let muted = UIColor(white: 0.66, alpha: 1)
-    // Keep the working save alive when the user leaves a section and opens another
-    // editor screen. The imported source file remains unchanged until export.
+    private var muted: UIColor { SFUIKitTheme.secondary }
     private static var sharedWorkingSaveURL: URL?
     private static var sharedWorkingSaveData: Data?
 
@@ -810,31 +1051,33 @@ private final class StardewEditorViewController: UIViewController {
         ("Skills", "chart.bar.fill", "Skill levels and experience"),
         ("Relationships", "heart.fill", "Friendship and social records"),
         ("Farm", "house.fill", "Farm identity and world data"),
-        ("Animals", "pawprint.fill", "Farm animals and pets"),
         ("Tools", "hammer.fill", "Add and manage farm tools"),
         ("Progress", "trophy.fill", "Calendar and progression")
     ]
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        observeThemeChanges()
         view.backgroundColor = brown
         title = "STARDEW VALLEY"
         navigationItem.largeTitleDisplayMode = .never
 
-        // Restore the in-memory working copy first. Only load the original imported
-        // save when no working copy exists or the imported source has changed.
         if let workingURL = Self.sharedWorkingSaveURL,
            let workingData = Self.sharedWorkingSaveData {
             saveURL = workingURL
             saveData = workingData
-        } else if let importedURL = locateSave(),
-                  let importedData = try? Data(contentsOf: importedURL),
-                  (try? StardewSaveParser.parse(data: importedData, filename: importedURL.lastPathComponent)) != nil {
-            saveURL = importedURL
-            saveData = importedData
         }
 
-        showSection(initialSection)
+        if initialSection == "Dashboard" {
+            showDashboard()
+        } else {
+            showSection(initialSection)
+        }
+    }
+
+    static func activateWorkingCopy(url: URL, data: Data) {
+        sharedWorkingSaveURL = url
+        sharedWorkingSaveData = data
     }
 
     private func configureStack() {
@@ -892,12 +1135,8 @@ private final class StardewEditorViewController: UIViewController {
         addHeader("Stardew Valley Editor", detail: "Select a section. Your imported save is kept untouched until you export a separate edited copy.")
         if let url = saveURL, saveData != nil {
             content.addArrangedSubview(label("WORKING COPY ACTIVE · \(url.lastPathComponent)", size: 10, color: UIColor.systemGreen))
-        } else if let url = locateSave() {
-            saveURL = url
-            saveData = try? Data(contentsOf: url)
-            content.addArrangedSubview(label("SAVE LOADED · \(url.lastPathComponent)", size: 10, color: UIColor.systemGreen))
         } else {
-            content.addArrangedSubview(label("NO IMPORTED FARM SAVE FOUND. Use IMPORT A SAVE in the Library first.", size: 11, color: gold, bold: false))
+            content.addArrangedSubview(label("NO ACTIVE FARM SESSION. Import or select a Stardew save to begin editing. Imported backups remain stored, but are not loaded automatically.", size: 11, color: gold, bold: false))
         }
         let grid = UIStackView(); grid.axis = .vertical; grid.spacing = 9
         for start in stride(from: 0, to: sectionNames.count, by: 3) {
@@ -912,11 +1151,11 @@ private final class StardewEditorViewController: UIViewController {
             grid.addArrangedSubview(row)
         }
         content.addArrangedSubview(grid)
-        content.addArrangedSubview(button("Reload Imported Save", detail: "Discard working edits and reload the original imported farm") { [weak self] in
-            guard let self, let url = self.locateSave(), let data = try? Data(contentsOf: url) else { return }
-            Self.sharedWorkingSaveURL = url
-            Self.sharedWorkingSaveData = data
-            self.saveURL = url
+        content.addArrangedSubview(button("Reload Current Save", detail: "Discard working edits and reload this session's imported farm") { [weak self] in
+            guard let self, let url = self.saveURL, let data = try? Data(contentsOf: url) else {
+                StorageCleanup.showError("No Active Farm", message: "Import a Stardew Valley save before reloading.")
+                return
+            }
             self.saveData = data
             self.showDashboard()
         })
@@ -941,18 +1180,14 @@ private final class StardewEditorViewController: UIViewController {
             return
         }
         if name == "Tools" || name == "Equipment" {
-            // Stardew's Library module is labeled Equipment, while the internal
-            // editor section is called Tools. Both names must open the same tool manager.
             showToolsEditor(xml)
             return
         }
-        if ["Skills", "Relationships", "Animals"].contains(name) {
+        if ["Skills", "Relationships"].contains(name) {
             showStructuredSectionEditor(name, xml: xml)
             return
         }
 
-        // Each section exposes real XML-backed values. Repeated values are indexed
-        // so changing one entry does not overwrite every item with the same tag.
         let specs: [(String, String, String, Int?)]
         switch name {
         case "Farmer":
@@ -969,8 +1204,6 @@ private final class StardewEditorViewController: UIViewController {
             specs = [("Farming XP","experiencePoints","number",0),("Mining XP","experiencePoints","number",1),("Combat XP","experiencePoints","number",2),("Foraging XP","experiencePoints","number",3),("Fishing XP","experiencePoints","number",4)]
         case "Relationships":
             specs = [("Friendship Points","Points","number",nil),("Friendship Status","Status","text",nil)]
-        case "Animals":
-            specs = [("Animal Age","age","number",nil),("Animal Friendship","friendshipTowardFarmer","number",nil),("Animal Happiness","happiness","number",nil),("Animal Fullness","fullness","number",nil)]
         default:
             specs = []
         }
@@ -988,7 +1221,9 @@ private final class StardewEditorViewController: UIViewController {
 
         var added = 0
         for (titleText, tag, kind, requestedOccurrence) in specs {
-            let matches = xmlTagValues(xml, tag: tag)
+            let matches = name == "Farmer"
+                ? xmlDirectChildValues(xml, parentPath: "SaveGame.player", tag: tag)
+                : xmlTagValues(xml, tag: tag)
             guard !matches.isEmpty else { continue }
             let selected: [(Int, String)]
             if let requestedOccurrence {
@@ -1026,7 +1261,6 @@ private final class StardewEditorViewController: UIViewController {
             case "Inventory": message = "No editable item stack or quality values were found in this save. The inventory structure is preserved."
             case "Skills": message = "No skill experience values were found in this save. The original skill data is preserved."
             case "Relationships": message = "No friendship point or status values were found in this save."
-            case "Animals": message = "No animal age, friendship, happiness, or fullness values were found in this save."
             default: message = "This save does not contain the supported values for this section."
             }
             content.addArrangedSubview(label(message, size: 12, color: muted, bold: false))
@@ -1052,8 +1286,6 @@ private final class StardewEditorViewController: UIViewController {
             ]
         case "Relationships":
             sectionFields = [("Villager name / ID", "villagerName", "text"), ("Friendship points", "friendshipPoints", "number")]
-        case "Animals":
-            sectionFields = [("Animal name", "animalName", "text"), ("Animal type", "animalType", "text"), ("Animal friendship", "friendshipTowardFarmer", "number"), ("Animal age", "age", "number")]
         default:
             sectionFields = [("Tool name", "toolName", "text"), ("Tool upgrade level", "upgradeLevel", "number"), ("Equipped item ID", "equippedItemID", "number")]
         }
@@ -1107,24 +1339,6 @@ private final class StardewEditorViewController: UIViewController {
                 self.showSection("Relationships")
             })
             content.addArrangedSubview(label("Existing friendship records are retained. If friendshipData is missing, the editor creates the dictionary inside the player record before adding the selected villager.", size: 10, color: muted, bold: false))
-        } else if name == "Animals" {
-            content.addArrangedSubview(label("Animal records are stored inside farm buildings and require the building/animal XML structure. This editor shows the supported animal values found in the save; it does not fabricate a building or animal record.", size: 10, color: muted, bold: false))
-            let tags = ["name", "type", "age", "friendshipTowardFarmer", "happiness", "fullness"]
-            for tag in tags {
-                let vals = xmlTagValues(xml, tag: tag)
-                for (index, value) in vals.prefix(12).enumerated() {
-                    let field = makeEditorField(placeholder: tag)
-                    field.text = value
-                    fields["\(tag)#\(index)"] = field
-                    content.addArrangedSubview(label("\(tag) \(index+1)", size: 10, color: gold))
-                    content.addArrangedSubview(field)
-                }
-            }
-            if fields.isEmpty {
-                content.addArrangedSubview(label("No animal records found in this farm save. Importing or creating animal buildings requires additional building context.", size: 11, color: muted, bold: false))
-            } else {
-                content.addArrangedSubview(button("Save Animal Values", detail: "Update supported scalar fields") { [weak self] in self?.applyFields() })
-            }
         } else {
             content.addArrangedSubview(label("Equipment editor", size: 12, color: gold))
             let tags = ["upgradeLevel", "upgradeLevel"]
@@ -1195,8 +1409,6 @@ private final class StardewEditorViewController: UIViewController {
             .replacingOccurrences(of: "'", with: "&apos;")
         let entry = "<item><key><string>\(escapedName)</string></key><value><Friendship><Points>\(points)</Points><Status>Friendly</Status></Friendship></value></item>"
 
-        // Locate the player's friendship dictionary. Some imported/test saves
-        // do not have friendshipData yet, so initialize it inside the player node.
         if let open = xml.range(of: "<friendshipData>"),
            let close = xml.range(of: "</friendshipData>", range: open.upperBound..<xml.endIndex) {
             var body = String(xml[open.upperBound..<close.lowerBound])
@@ -1261,7 +1473,7 @@ private final class StardewEditorViewController: UIViewController {
             }
         })
 
-        let cleanInventoryXML = xml.replacingOccurrences(of: #"\\(fragment)"#, with: "")
+        let cleanInventoryXML = xml.replacingOccurrences(of: #"\(fragment)"#, with: "")
         let toolsInInventory = inventoryItems(in: cleanInventoryXML).filter { $0.id == -1 }
         content.addArrangedSubview(label("TOOLS IN FARM INVENTORY · \(toolsInInventory.count)", size: 12, color: gold))
         if toolsInInventory.isEmpty {
@@ -1275,12 +1487,8 @@ private final class StardewEditorViewController: UIViewController {
     }
 
     private func createToolAndInsert(xml: String, className: String, displayName: String) -> String? {
-        // Remove the literal placeholder written by earlier buggy builds.
-        var sourceXML = xml.replacingOccurrences(of: #"\\(fragment)"#, with: "")
+        var sourceXML = xml.replacingOccurrences(of: #"\(fragment)"#, with: "")
 
-        // Every generated tool uses xsi:type. Declare the namespace even when
-        // the farmer already had an <items> collection (the earlier fix only
-        // handled saves where the collection was missing).
         if !sourceXML.contains("xmlns:xsi="),
            let rootStart = sourceXML.range(of: "<SaveGame"),
            let rootEnd = sourceXML.range(of: ">", range: rootStart.upperBound..<sourceXML.endIndex) {
@@ -1327,15 +1535,10 @@ private final class StardewEditorViewController: UIViewController {
         <Item xsi:type="\(className)"><isLostItem>false</isLostItem><category>-99</category><hasBeenInInventory>true</hasBeenInInventory><name>\(baseName)</name><specialItem>false</specialItem><SpecialVariable>0</SpecialVariable><DisplayName>\(safeName)</DisplayName><Name>\(safeName)</Name><Stack>1</Stack><initialParentTileIndex>\(initialIndex)</initialParentTileIndex><currentParentTileIndex>\(initialIndex)</currentParentTileIndex><indexOfMenuItemView>\(menuIndex)</indexOfMenuItemView><stackable>false</stackable><instantUse>false</instantUse><isEfficient>false</isEfficient><animationSpeedModifier>1</animationSpeedModifier><upgradeLevel>0</upgradeLevel><numAttachmentSlots>0</numAttachmentSlots><attachments />\(extraFields)<BaseName>\(baseName)</BaseName><InitialParentTileIndex>\(initialIndex)</InitialParentTileIndex><IndexOfMenuItemView>\(menuIndex)</IndexOfMenuItemView><InstantUse>false</InstantUse><IsEfficient>false</IsEfficient><AnimationSpeedModifier>1</AnimationSpeedModifier><Stackable>false</Stackable></Item>
         """
 
-        // Important: Stardew saves contain many unrelated <items> collections
-        // (chests, fridges, machines). Only edit the <items> node inside <player>.
         guard let playerContents = xmlElementContents(tag: "player", in: sourceXML) else {
             return nil
         }
 
-        // Minimal/imported test saves may omit the inventory node entirely.
-        // Create the farmer's <items> collection inside <player> instead of
-        // failing the Add Tool action. Never use another object's items list.
         guard let itemsContents = xmlElementContents(tag: "items", in: sourceXML, within: playerContents) else {
             var initialized = sourceXML
             initialized.insert(contentsOf: "<items>\(fragment)</items>", at: playerContents.upperBound)
@@ -1344,7 +1547,6 @@ private final class StardewEditorViewController: UIViewController {
         }
 
         let inventoryBody = String(sourceXML[itemsContents])
-        // Do not create duplicate instances of a tool class if one is already present.
         let existingTypePattern = #"<Item\\b[^>]*xsi:type=""# + NSRegularExpression.escapedPattern(for: className) + #"""#
         if let typeRegex = try? NSRegularExpression(pattern: existingTypePattern, options: [.dotMatchesLineSeparators]),
            typeRegex.firstMatch(in: inventoryBody, range: NSRange(inventoryBody.startIndex..., in: inventoryBody)) != nil {
@@ -1555,7 +1757,6 @@ private final class StardewEditorViewController: UIViewController {
         guard let playerContents = xmlElementContents(tag: "player", in: xml),
               let itemsContents = xmlElementContents(tag: "items", in: xml, within: playerContents) else { return [] }
         let body = String(xml[itemsContents])
-        // Match the whole Item element so xsi:type is retained for tool detection.
         let pattern = #"<Item(?:\s+[^>]*)?>.*?</Item>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return [] }
         return regex.matches(in: body, range: NSRange(body.startIndex..., in: body)).compactMap { match in
@@ -1604,7 +1805,6 @@ private final class StardewEditorViewController: UIViewController {
             updated.insert(contentsOf: fragment, at: close.lowerBound)
             return updated
         }
-        // Minimal/synthetic saves may not have an items collection yet.
         guard let playerOpen = xml.range(of: "<player>"),
               let playerClose = xml.range(of: "</player>", range: playerOpen.upperBound..<xml.endIndex) else { return nil }
         var updated = xml
@@ -1641,6 +1841,31 @@ private final class StardewEditorViewController: UIViewController {
         return updated
     }
 
+    private func xmlDirectChildValues(_ xml: String, parentPath: String, tag: String) -> [String] {
+        guard let data = xml.data(using: .utf8) else { return [] }
+        let reader = StardewXMLReader()
+        let parser = XMLParser(data: data)
+        parser.delegate = reader
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse() else { return [] }
+        guard let value = reader.values[parentPath + "." + tag], !value.isEmpty else { return [] }
+        return [value]
+    }
+
+    private func xmlElementContentRange(_ xml: String, tag: String) -> Range<String.Index>? {
+        let escaped = NSRegularExpression.escapedPattern(for: tag)
+        guard let open = xml.range(of: "<\\s*" + escaped + "(?:\\s[^>]*)?>", options: .regularExpression),
+              let close = xml.range(of: "</\\s*" + escaped + "\\s*>", options: .regularExpression, range: open.upperBound..<xml.endIndex) else {
+            return nil
+        }
+        return open.upperBound..<close.lowerBound
+    }
+
+    private func xmlElementContents(_ xml: String, tag: String) -> String? {
+        guard let range = xmlElementContentRange(xml, tag: tag) else { return nil }
+        return String(xml[range])
+    }
+
     private func xmlTagValues(_ xml: String, tag: String) -> [String] {
         if tag == "experiencePoints" {
             let wrapper = "<\\s*experiencePoints(?:\\s[^>]*)?>(.*?)</\\s*experiencePoints\\s*>"
@@ -1661,7 +1886,6 @@ private final class StardewEditorViewController: UIViewController {
         return regex.matches(in: xml, range: range).compactMap { match in
             guard let valueRange = Range(match.range(at: 1), in: xml) else { return nil }
             let value = String(xml[valueRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-            // Only expose scalar nodes, not nested XML fragments.
             guard !value.contains("<"), !value.contains(">") else { return nil }
             return value
         }
@@ -1675,6 +1899,13 @@ private final class StardewEditorViewController: UIViewController {
 
     private func applyFields() {
         guard let data = saveData, var xml = String(data: data, encoding: .utf8) else { return }
+        let farmerContentRange = currentSection == "Farmer" ? xmlElementContentRange(xml, tag: "player") : nil
+        var targetXML: String
+        if let farmerContentRange {
+            targetXML = String(xml[farmerContentRange])
+        } else {
+            targetXML = xml
+        }
 
         for (fieldKey, field) in fields {
             guard let rawValue = field.text, !rawValue.isEmpty else { continue }
@@ -1696,12 +1927,12 @@ private final class StardewEditorViewController: UIViewController {
             if tag == "experiencePoints" {
                 let wrapperPattern = "(<\\s*experiencePoints(?:\\s[^>]*)?>)(.*?)(</\\s*experiencePoints\\s*>)"
                 guard let wrapperRegex = try? NSRegularExpression(pattern: wrapperPattern, options: [.dotMatchesLineSeparators]),
-                      let wrapperMatch = wrapperRegex.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)),
-                      let wrapperFull = Range(wrapperMatch.range, in: xml),
-                      let wrapperOpen = Range(wrapperMatch.range(at: 1), in: xml),
-                      let wrapperInner = Range(wrapperMatch.range(at: 2), in: xml),
-                      let wrapperClose = Range(wrapperMatch.range(at: 3), in: xml) else { continue }
-                var inner = String(xml[wrapperInner])
+                      let wrapperMatch = wrapperRegex.firstMatch(in: targetXML, range: NSRange(targetXML.startIndex..., in: targetXML)),
+                      let wrapperFull = Range(wrapperMatch.range, in: targetXML),
+                      let wrapperOpen = Range(wrapperMatch.range(at: 1), in: targetXML),
+                      let wrapperInner = Range(wrapperMatch.range(at: 2), in: targetXML),
+                      let wrapperClose = Range(wrapperMatch.range(at: 3), in: targetXML) else { continue }
+                var inner = String(targetXML[wrapperInner])
                 let intPattern = "(<\\s*int(?:\\s[^>]*)?>)(.*?)(</\\s*int\\s*>)"
                 guard let intRegex = try? NSRegularExpression(pattern: intPattern, options: [.dotMatchesLineSeparators]) else { continue }
                 let intMatches = intRegex.matches(in: inner, range: NSRange(inner.startIndex..., in: inner))
@@ -1711,48 +1942,38 @@ private final class StardewEditorViewController: UIViewController {
                       let intClose = Range(intMatches[occurrence].range(at: 3), in: inner),
                       Int(value) != nil else { continue }
                 inner.replaceSubrange(intFull, with: String(inner[intOpen]) + value + String(inner[intClose]))
-                xml.replaceSubrange(wrapperFull, with: String(xml[wrapperOpen]) + inner + String(xml[wrapperClose]))
+                targetXML.replaceSubrange(wrapperFull, with: String(targetXML[wrapperOpen]) + inner + String(targetXML[wrapperClose]))
                 continue
             }
 
             let escaped = NSRegularExpression.escapedPattern(for: tag)
             let pattern = "(<\\s*" + escaped + "(?:\\s[^>]*)?>)(.*?)(</\\s*" + escaped + "\\s*>)"
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { continue }
-            let range = NSRange(xml.startIndex..., in: xml)
-            let matches = regex.matches(in: xml, range: range)
+            let range = NSRange(targetXML.startIndex..., in: targetXML)
+            let matches = regex.matches(in: targetXML, range: range)
             guard matches.indices.contains(occurrence),
-                  let full = Range(matches[occurrence].range, in: xml),
-                  let open = Range(matches[occurrence].range(at: 1), in: xml),
-                  let close = Range(matches[occurrence].range(at: 3), in: xml) else { continue }
+                  let full = Range(matches[occurrence].range, in: targetXML),
+                  let open = Range(matches[occurrence].range(at: 1), in: targetXML),
+                  let close = Range(matches[occurrence].range(at: 3), in: targetXML) else { continue }
 
-            // Avoid replacing nested XML elements; only scalar values are editable.
-            let replacement = String(xml[open]) + value + String(xml[close])
-            xml.replaceSubrange(full, with: replacement)
+            let replacement = String(targetXML[open]) + value + String(targetXML[close])
+            targetXML.replaceSubrange(full, with: replacement)
         }
 
+        if let farmerContentRange {
+            xml.replaceSubrange(farmerContentRange, with: targetXML)
+        } else {
+            xml = targetXML
+        }
         saveData = xml.data(using: .utf8)
         showAlert("Changes Saved", "Your working copy has been updated. Export to create the edited farm copy.")
-    }
-
-    private func locateSave() -> URL? {
-        let root = AppFileStore.importedDirectory.appendingPathComponent("Stardew Valley", isDirectory: true)
-        guard let e = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey], options: [.skipsHiddenFiles]) else { return nil }
-        var candidates: [URL] = []
-        while let u = e.nextObject() as? URL {
-            if u.lastPathComponent == "SaveGameInfo" { continue }
-            if u.pathExtension.isEmpty, let d = try? Data(contentsOf: u), (try? StardewSaveParser.parse(data: d, filename: u.lastPathComponent)) != nil { candidates.append(u) }
-        }
-        func modificationDate(_ url: URL) -> Date {
-            return (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-        }
-        return candidates.sorted { modificationDate($0) > modificationDate($1) }.first
     }
 
     private func exportSave() {
         guard let data = saveData, let source = saveURL else { showAlert("No Save Loaded", "Import a Stardew Valley save first."); return }
         do {
             let fm = FileManager.default; let stamp = Int(Date().timeIntervalSince1970)
-            let output = AppFileStore.documentsDirectory.appendingPathComponent("Stardew Valley Edited-\(stamp)", isDirectory: true)
+            let output = AppFileStore.exportsDirectory.appendingPathComponent("Stardew Valley Edited-\(stamp)", isDirectory: true)
             try fm.createDirectory(at: output, withIntermediateDirectories: true)
             if let folder = source.deletingLastPathComponent() as URL?, folder.lastPathComponent != "Stardew Valley", (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
                 let destinationFolder = output.appendingPathComponent(folder.lastPathComponent, isDirectory: true)
@@ -1761,12 +1982,10 @@ private final class StardewEditorViewController: UIViewController {
             } else {
                 try data.write(to: output.appendingPathComponent(source.lastPathComponent), options: .atomic)
             }
-            showAlert("Export Complete", "Edited save copy created in Documents/\(output.lastPathComponent). Your imported original was not changed.")
+            showAlert("Export Complete", "Edited farm backup saved in SAVEFORGE/Exports/\(output.lastPathComponent). Your imported original was not changed.")
         } catch { showAlert("Export Failed", error.localizedDescription) }
     }
 
-    // Fallout-style native selection menu. UIAlertController action sheets scroll
-    // automatically when the list is longer than the available screen height.
     private func presentScrollMenu(title: String, options: [String], onSelect: @escaping (Int) -> Void) {
         guard !options.isEmpty else {
             showAlert("Nothing to Select", "No matching entries were found in this imported save.")
@@ -1808,6 +2027,8 @@ private final class StardewEditorViewController: UIViewController {
 // MARK: - Screenshot gallery
 
 private struct ScreenshotGallery: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let game: GameInfo
 
     var body: some View {
@@ -1825,6 +2046,8 @@ private struct ScreenshotGallery: View {
 }
 
 private struct ScreenshotTile: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let url: String
     let accent: Color
     let label: String
@@ -1882,6 +2105,8 @@ private struct ScreenshotTile: View {
 }
 
 private struct MediaPreviewScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let urlString: String
     let title: String
     let accent: Color
@@ -1969,8 +2194,2050 @@ private struct AnimatedWebMedia: UIViewRepresentable {
     }
 }
 
+// MARK: - Minecraft editor hub and offline reference catalogs
+// MARK: - Minecraft editor
+private struct MinecraftEditorSection: Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let symbol: String
+    let status: String
+    let ready: Bool
+
+    static let all = [
+        MinecraftEditorSection(id: "player", title: "Player", detail: "Read and stage supported player attributes and abilities", symbol: "person.fill", status: "FOUNDATION", ready: true),
+        MinecraftEditorSection(id: "inventory", title: "Inventory & Hotbar", detail: "Browse items, quantities and enchantments", symbol: "shippingbox.fill", status: "CATALOG", ready: true),
+        MinecraftEditorSection(id: "world", title: "World Settings", detail: "World identity, game mode, difficulty, weather and gamerules", symbol: "globe.americas.fill", status: "READY", ready: true)
+    ]
+}
+
+private final class MinecraftEditorLoadModel: ObservableObject {
+    static let shared = MinecraftEditorLoadModel()
+    @Published private(set) var snapshot: MinecraftPlayerSnapshot?
+    @Published private(set) var isLoading = false
+    @Published private(set) var errorMessage: String?
+
+    private let lock = NSLock()
+    private var loadedPath: String?
+    private var loadingPath: String?
+    private var attemptedPath: String?
+
+    func reset() {
+        lock.lock()
+        loadedPath = nil
+        loadingPath = nil
+        attemptedPath = nil
+        lock.unlock()
+        DispatchQueue.main.async {
+            self.snapshot = nil
+            self.isLoading = false
+            self.errorMessage = nil
+        }
+    }
+
+    func load(worldURL: URL) {
+        let path = worldURL.standardizedFileURL.path
+        lock.lock()
+        if loadedPath == path || loadingPath == path || attemptedPath == path {
+            lock.unlock()
+            return
+        }
+        loadingPath = path
+        attemptedPath = path
+        lock.unlock()
+
+        DispatchQueue.main.async {
+            self.isLoading = true
+            self.errorMessage = nil
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try MinecraftPlayerSnapshot.load(worldURL: worldURL) }
+            DispatchQueue.main.async {
+                self.lock.lock()
+                guard self.loadingPath == path else {
+                    self.lock.unlock()
+                    return
+                }
+                self.loadingPath = nil
+                switch result {
+                case .success(let value):
+                    self.snapshot = value
+                    self.loadedPath = path
+                    self.errorMessage = nil
+                case .failure(let error):
+                    self.snapshot = nil
+                    self.loadedPath = nil
+                    self.attemptedPath = nil
+                    self.errorMessage = error.localizedDescription
+                }
+                self.isLoading = false
+                self.lock.unlock()
+            }
+        }
+    }
+}
+
+// MARK: - Minecraft edit session
+private final class MinecraftEditSession: ObservableObject {
+    static let shared = MinecraftEditSession()
+    @Published private(set) var playerEdits: [MinecraftPlayerEditService.Field: Double] = [:]
+    @Published private(set) var abilityEdits: [String: Bool] = [:]
+    @Published private(set) var lastExportName: String? = nil
+    @Published private(set) var inventoryCounts: [Int: Int] = [:]
+    @Published private(set) var removedInventorySlots: Set<Int> = []
+    @Published private(set) var inventoryAdditions: [Int: MinecraftStagedInventoryAddition] = [:]
+    @Published private(set) var inventoryMoves: [Int: Int] = [:]
+    @Published private(set) var inventorySwaps: [Int: Int] = [:]
+    @Published private(set) var levelEdits: [String: String] = [:]
+    var pendingCount: Int { playerEdits.count + abilityEdits.count + inventoryCounts.count + removedInventorySlots.count + levelEdits.count + inventoryAdditions.count + inventoryMoves.count + inventorySwaps.count / 2 }
+    func stage(_ field: MinecraftPlayerEditService.Field, value: Double) { playerEdits[field] = value }
+    func stageAbility(_ key: String, value: Bool) { abilityEdits[key] = value }
+    func stageInventoryCount(slot: Int, count: Int) { inventoryCounts[slot] = count; removedInventorySlots.remove(slot) }
+    func stageInventoryAddition(_ item: MinecraftStagedInventoryAddition) {
+        inventoryAdditions[item.slot] = item
+        removedInventorySlots.remove(item.slot)
+        inventoryCounts.removeValue(forKey: item.slot)
+    }
+    func stageInventoryMove(from source: Int, to destination: Int) {
+        guard (0...35).contains(source), (0...35).contains(destination), source != destination,
+              !inventoryMoves.values.contains(destination), !inventoryMoves.keys.contains(destination),
+              !inventoryMoves.values.contains(source), !inventoryMoves.keys.contains(source) else { return }
+        inventoryMoves[source] = destination
+    }
+    func stageInventorySwap(first: Int, second: Int) {
+        guard (0...35).contains(first), (0...35).contains(second), first != second,
+              inventorySwaps[first] == nil, inventorySwaps[second] == nil,
+              !inventoryMoves.keys.contains(first), !inventoryMoves.keys.contains(second),
+              !inventoryMoves.values.contains(first), !inventoryMoves.values.contains(second) else { return }
+        inventorySwaps[first] = second
+        inventorySwaps[second] = first
+    }
+    func stageInventoryAdditionCount(slot: Int, count: Int) {
+        guard let item = inventoryAdditions[slot] else { return }
+        inventoryAdditions[slot] = MinecraftStagedInventoryAddition(identifier: item.identifier, slot: slot, count: count)
+    }
+    func removeInventorySlot(_ slot: Int) {
+        if inventoryAdditions[slot] != nil {
+            inventoryAdditions.removeValue(forKey: slot)
+        } else {
+            removedInventorySlots.insert(slot)
+            inventoryCounts.removeValue(forKey: slot)
+        }
+    }
+    func stageLevel(_ key: String, value: String) {
+        guard key != "RandomSeed" else { return }
+        levelEdits[key] = value
+    }
+    func clear() { playerEdits.removeAll(); abilityEdits.removeAll(); inventoryCounts.removeAll(); removedInventorySlots.removeAll(); levelEdits.removeAll(); inventoryAdditions.removeAll(); inventoryMoves.removeAll(); inventorySwaps.removeAll() }
+}
+
+private final class MinecraftWorldExportPickerDelegate: NSObject, UIDocumentPickerDelegate {
+    static var active: MinecraftWorldExportPickerDelegate?
+    private let onExported: () -> Void
+
+    init(onExported: @escaping () -> Void) {
+        self.onExported = onExported
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        onExported()
+        Self.active = nil
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        Self.active = nil
+    }
+}
+
+// MARK: - Minecraft editor screen
+private struct MinecraftEditorSectionScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
+    let section: MinecraftEditorSection
+
+    @ObservedObject private var loadModel = MinecraftEditorLoadModel.shared
+    @ObservedObject private var editSession = MinecraftEditSession.shared
+    @ObservedObject private var catalogBrowser = MinecraftCatalogBrowserModel.shared
+    private let gold = SF.farmGold
+    private var worldLoaded: Bool { MinecraftWorldImportStore.currentWorldURL != nil }
+    private var playerSnapshot: MinecraftPlayerSnapshot? { loadModel.snapshot }
+    private var normalizedInventoryBySlot: [Int: MinecraftPlayerInventoryItem] {
+        var result: [Int: MinecraftPlayerInventoryItem] = [:]
+        for item in (playerSnapshot?.inventory ?? []).sorted(by: { $0.slot < $1.slot }) {
+            guard (0..<36).contains(item.slot), result[item.slot] == nil,
+                  !item.identifier.isEmpty, item.count > 0 else { continue }
+            result[item.slot] = item
+        }
+        return result
+    }
+
+    private func effectiveInventoryItem(at slot: Int) -> MinecraftPlayerInventoryItem? {
+        guard (0...35).contains(slot), !editSession.removedInventorySlots.contains(slot) else { return nil }
+        if let addition = editSession.inventoryAdditions[slot] {
+            return MinecraftPlayerInventoryItem(identifier: addition.identifier, slot: slot, count: addition.count, damage: 0)
+        }
+        if editSession.inventoryMoves.values.contains(slot),
+           let source = editSession.inventoryMoves.first(where: { $0.value == slot })?.key,
+           let original = normalizedInventoryBySlot[source] {
+            let count = editSession.inventoryCounts[source] ?? original.count
+            guard count > 0 else { return nil }
+            return MinecraftPlayerInventoryItem(identifier: original.identifier, slot: slot, count: count, damage: original.damage)
+        }
+        if editSession.inventoryMoves[slot] != nil { return nil }
+        guard let original = normalizedInventoryBySlot[slot] else { return nil }
+        let count = editSession.inventoryCounts[slot] ?? original.count
+        guard count > 0 else { return nil }
+        return MinecraftPlayerInventoryItem(identifier: original.identifier, slot: slot, count: count, damage: original.damage)
+    }
+
+    private var safeHotbarItems: [MinecraftPlayerInventoryItem?] {
+        (0..<9).map { effectiveInventoryItem(at: $0) }
+    }
+    private var safeInventoryItems: [MinecraftPlayerInventoryItem] {
+        (9..<36).compactMap { effectiveInventoryItem(at: $0) }
+    }
+    private var levelDocument: BedrockLevelDatDocument? {
+        guard let world = MinecraftWorldImportStore.currentWorldURL else { return nil }
+        return try? BedrockLevelDatDocument.read(from: world.appendingPathComponent("level.dat"))
+    }
+    private var gameModeLabel: String {
+        guard let mode = levelDocument?.gameType else { return "UNAVAILABLE" }
+        switch mode {
+        case 0: return "SURVIVAL"
+        case 1: return "CREATIVE"
+        case 2: return "ADVENTURE"
+        case 6: return "SPECTATOR"
+        default: return "UNKNOWN (\(mode))"
+        }
+    }
+    private var difficultyLabel: String {
+        guard let difficulty = levelDocument?.difficulty else { return "UNAVAILABLE" }
+        switch difficulty {
+        case 0: return "PEACEFUL"
+        case 1: return "EASY"
+        case 2: return "NORMAL"
+        case 3: return "HARD"
+        default: return "UNKNOWN (\(difficulty))"
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            SF.background.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 15) {
+                    header
+                    if editSession.pendingCount > 0 { pendingExportPanel }
+                    if !worldLoaded {
+                        statusPanel("NO WORLD LOADED", "No valid Bedrock world session is active. Import a world containing level.dat and a db folder. Editing and export are disabled until validation succeeds.")
+                    } else {
+                        switch section.id {
+                        case "player": playerWorkspace
+                        case "inventory": inventoryWorkspace
+                        case "world": worldSettingsWorkspace
+                        default: playerWorkspace
+                        }
+                    }
+                    safeModeFooter
+                }.padding(16)
+            }
+        }
+        .navigationTitle(section.title.uppercased())
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if section.id == "inventory" {
+                catalogBrowser.load()
+            }
+            if section.id == "player" || section.id == "inventory",
+               let world = MinecraftWorldImportStore.currentWorldURL {
+                loadModel.load(worldURL: world)
+            }
+        }
+    }
+
+    private var pendingExportPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("\(editSession.pendingCount) PENDING EDIT\(editSession.pendingCount == 1 ? "" : "S")")
+                    .font(.system(size: 10, weight: .black, design: .monospaced)).foregroundStyle(gold)
+                Spacer()
+                Text("NOT EXPORTED").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(SF.muted)
+            }
+            Button(action: exportPendingWorld) {
+                HStack { Image(systemName: "square.and.arrow.up.fill"); Text("EXPORT EDITED WORLD") }
+                    .font(.system(size: 11, weight: .black, design: .monospaced)).foregroundStyle(.black)
+                    .frame(maxWidth: .infinity).padding(13).background(gold).clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }.padding(12).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func exportPendingWorld() {
+        guard let world = MinecraftWorldImportStore.currentWorldURL,
+              MinecraftWorldImportStore.isWorldFolder(world),
+              editSession.pendingCount > 0 else {
+            presentPlayerResult(title: "NO VALID WORLD", message: "Import a valid Bedrock world before exporting edits.")
+            return
+        }
+        let edits = editSession.playerEdits
+        let abilities = editSession.abilityEdits
+        let inventoryCounts = editSession.inventoryCounts
+        let removals = editSession.removedInventorySlots
+        let levelEdits = editSession.levelEdits
+        let additions = editSession.inventoryAdditions
+        let moves = editSession.inventoryMoves
+        let swaps = editSession.inventorySwaps
+        let alert = UIAlertController(title: "EXPORT ALL CHANGES?", message: "SAVEFORGE will apply all pending player changes in one database transaction and save a .mcworld backup in SAVEFORGE/Exports. When complete, you can share the complete world archive. The archive will not be opened or browsed internally.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "CANCEL", style: .cancel))
+        alert.addAction(UIAlertAction(title: "EXPORT", style: .default) { _ in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let output = try MinecraftPlayerEditService.exportEditedWorld(sourceWorld: world, edits: edits, abilityEdits: abilities, inventoryCounts: inventoryCounts, removedInventorySlots: removals, levelEdits: levelEdits, inventoryAdditions: additions, inventoryMoves: moves, inventorySwaps: swaps)
+                    DispatchQueue.main.async {
+                        guard let presenter = UIApplication.shared.topMostViewController else {
+                            self.presentPlayerResult(title: "EXPORT READY", message: "Your .mcworld backup is saved in SAVEFORGE/Exports, but the share sheet could not be opened.")
+                            return
+                        }
+                        let share = UIActivityViewController(activityItems: [output], applicationActivities: nil)
+                        if let popover = share.popoverPresentationController {
+                            popover.sourceView = presenter.view
+                            popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1)
+                            popover.permittedArrowDirections = []
+                        }
+                        share.completionWithItemsHandler = { _, completed, _, _ in
+                            if completed { editSession.clear() }
+                        }
+                        presenter.present(share, animated: true)
+                    }
+                } catch {
+                    DispatchQueue.main.async { self.presentPlayerResult(title: "EXPORT FAILED", message: error.localizedDescription) }
+                }
+            }
+        })
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Image(systemName: section.symbol).font(.system(size: 25, weight: .bold)).foregroundStyle(gold)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(section.title.uppercased()).font(.system(size: 17, weight: .black, design: .monospaced)).foregroundStyle(SF.text)
+                Text("MINECRAFT BEDROCK EDITOR").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(SF.muted)
+            }
+            Spacer()
+            if section.id == "inventory" {
+                Button(action: showInventoryInfo) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(gold)
+                        .padding(6)
+                        .background(SF.panel)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Inventory help")
+            }
+            Text(worldLoaded ? "WORLD LOADED" : "NO WORLD LOADED").font(.system(size: 8, weight: .black, design: .monospaced)).foregroundStyle(worldLoaded ? gold : SF.muted)
+        }.padding(.bottom, 4)
+    }
+
+    private func showInventoryInfo() {
+        let message = """
+        INVENTORY & HOTBAR
+
+        HOTBAR (SLOTS 1–9)
+        Your quick-access items. Tap an occupied slot to edit it, or an empty slot to move an existing item there.
+
+        PLAYER INVENTORY (SLOTS 10–36)
+        Your remaining inventory slots. Tap an occupied slot to change its quantity, remove it, move it, or swap it with another occupied slot.
+
+        ADDING ITEMS
+        Browse or search the Bedrock item catalog, then select an item and choose an available slot. Added items are marked .STAGED.
+
+        WHAT .STAGED MEANS
+        .STAGED means SAVEFORGE has queued that change in its working copy. It is visible in the editor, but it has NOT been written to your imported world.
+
+        EXPORTING
+        Use EXPORT EDITED WORLD once you have finished all changes. SAVEFORGE applies the staged edits to a separate exported .mcworld file. Your original imported world is not modified. If you cancel sharing after export, your staged edits remain available to retry.
+
+        CONTAINERS
+        Bundle and Shulker Box contents are only in scope when the item is present in your player inventory. Ender Chests are not supported.
+        """
+        let alert = UIAlertController(title: "INVENTORY GUIDE", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "GOT IT", style: .default))
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private var playerWorkspace: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("PLAYER ATTRIBUTES")
+            editorField("Health", value: stagedValue(for: "Health") ?? playerSnapshot?.health.map { String(format: "%.1f", $0) } ?? "UNAVAILABLE", detail: "Current health from local-player NBT")
+            editorField("Maximum Health", value: stagedValue(for: "Maximum Health") ?? playerSnapshot?.maximumHealth.map { String(format: "%.1f", $0) } ?? "UNAVAILABLE", detail: "Default maximum health")
+            editorField("Hunger", value: stagedValue(for: "Hunger") ?? playerSnapshot?.hunger.map { String(format: "%.1f", $0) } ?? "UNAVAILABLE", detail: "Food level from player attributes")
+            editorField("Saturation", value: stagedValue(for: "Saturation") ?? playerSnapshot?.saturation.map { String(format: "%.1f", $0) } ?? "UNAVAILABLE", detail: "Food saturation")
+            editorField("XP Level", value: stagedValue(for: "XP Level") ?? playerSnapshot?.xpLevel.map(String.init) ?? "UNAVAILABLE", detail: "PlayerLevel only")
+            sectionLabel("PLAYER ABILITIES")
+            abilityRow("May fly", key: "mayfly")
+            abilityRow("Flying", key: "flying")
+            abilityRow("May build", key: "build")
+            if playerSnapshot != nil {
+                statusPanel("LIVE PLAYER DATA READ", "Numeric attributes and supported ability flags can be staged together. Use the single EXPORT EDITED WORLD button after finishing.")
+            } else {
+                statusPanel("PLAYER DATA NOT FOUND", "SAVEFORGE checked the active WAL and persisted LevelDB tables but could not recover a live player record. Check the import diagnostics for table-read warnings.")
+            }
+        }
+    }
+
+    private func abilityRow(_ title: String, key: String) -> some View {
+        let current = editSession.abilityEdits[key] ?? playerSnapshot?.abilities[key]
+        return Button {
+            guard let current else { showUnavailable(title); return }
+            editSession.stageAbility(key, value: !current)
+        } label: {
+            HStack {
+                Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(SF.text)
+                Spacer()
+                Text(current.map { $0 ? "ON" : "OFF" } ?? "UNAVAILABLE")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(gold)
+                Image(systemName: current.map { $0 ? "togglepower" : "power" } ?? "lock.fill")
+                    .foregroundStyle(current == nil ? SF.muted : gold)
+            }.padding(11).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 9))
+        }.buttonStyle(.plain).disabled(current == nil)
+    }
+
+    private var inventoryWorkspace: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            sectionLabel("HOTBAR · 9 SLOTS")
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 3), spacing: 7) {
+                ForEach(0..<9, id: \.self) { index in
+                    let item = safeHotbarItems.indices.contains(index) ? safeHotbarItems[index] : nil
+                    Button {
+                        if let item {
+                            if editSession.inventoryAdditions[index] != nil { showStagedInventoryEditor(item) }
+                            else { showInventoryEditor(item) }
+                        } else {
+                            showMoveIntoEmptySlot(index)
+                        }
+                    } label: {
+                        VStack(spacing: 5) {
+                            if let item, !item.identifier.isEmpty {
+                                MinecraftBedrockItemIconView(textureKey: item.identifier.replacingOccurrences(of: "minecraft:", with: "")).frame(width: 42, height: 42)
+                                Text(item.identifier.replacingOccurrences(of: "minecraft:", with: "").replacingOccurrences(of: "_", with: " ").uppercased())
+                                    .font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundStyle(SF.text).lineLimit(1)
+                                Text("x\(item.count)").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(gold)
+                            } else if let staged = editSession.inventoryAdditions[index] {
+                                MinecraftBedrockItemIconView(textureKey: staged.identifier.replacingOccurrences(of: "minecraft:", with: "")).frame(width: 42, height: 42)
+                                Text(staged.identifier.replacingOccurrences(of: "minecraft:", with: "").replacingOccurrences(of: "_", with: " ").uppercased())
+                                    .font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundStyle(SF.text).lineLimit(1)
+                                Text("x\(staged.count) · STAGED").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(gold)
+                            } else {
+                                Image(systemName: "square.dashed").font(.system(size: 22)).foregroundStyle(SF.muted)
+                                Text(String(format: "%02d", index + 1)).font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(SF.muted)
+                                Text("EMPTY").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(SF.muted)
+                            }
+                        }.frame(maxWidth: .infinity, minHeight: 105).padding(8).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 10))
+                    }.buttonStyle(.plain)
+                }
+            }
+            sectionLabel("INVENTORY")
+            HStack {
+                Text("PLAYER INVENTORY").font(.system(size: 10, weight: .black, design: .monospaced)).foregroundStyle(SF.text)
+                Spacer()
+                Text(playerSnapshot == nil ? "DATA UNAVAILABLE" : "\((0..<36).compactMap { effectiveInventoryItem(at: $0) }.count) LIVE STACKS")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(SF.muted)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: 5), spacing: 5) {
+                ForEach(9..<36, id: \.self) { slot in
+                    let item = effectiveInventoryItem(at: slot)
+                    Button {
+                        if let item {
+                            if editSession.inventoryAdditions[slot] != nil {
+                                showStagedInventoryEditor(item)
+                            } else {
+                                showInventoryEditor(item)
+                            }
+                        } else {
+                            showMoveIntoEmptySlot(slot)
+                        }
+                    } label: {
+                        VStack(spacing: 3) {
+                            if let item {
+                                MinecraftBedrockItemIconView(textureKey: item.identifier.replacingOccurrences(of: "minecraft:", with: "")).frame(width: 34, height: 34)
+                                Text("x\(item.count)").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(gold)
+                            } else {
+                                Image(systemName: "square.dashed").foregroundStyle(SF.muted.opacity(0.6))
+                                Text("EMPTY").font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundStyle(SF.muted)
+                            }
+                        }.frame(maxWidth: .infinity).frame(height: 61).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 7))
+                    }.buttonStyle(.plain)
+                }
+            }
+
+            sectionLabel("FULL BEDROCK ITEM CATALOG")
+            Text("Search and browse the vanilla Bedrock item database. Select an item to stage it in your inventory.")
+                .font(.system(size: 10)).foregroundStyle(SF.muted)
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(SF.muted)
+                TextField("Search all items…", text: $catalogBrowser.searchText)
+                    .font(.system(size: 12, design: .monospaced))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }.padding(11).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 10))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(catalogBrowser.categories, id: \.self) { category in
+                        Button {
+                            catalogBrowser.selectedCategory = category
+                        } label: {
+                            Text(category.uppercased())
+                                .font(.system(size: 9, weight: .black, design: .monospaced))
+                                .foregroundStyle(catalogBrowser.selectedCategory == category ? .black : gold)
+                                .padding(.horizontal, 11).padding(.vertical, 9)
+                                .background(catalogBrowser.selectedCategory == category ? gold : SF.panel)
+                                .clipShape(Capsule())
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+            HStack {
+                Text(catalogBrowser.status).font(.system(size: 9, design: .monospaced)).foregroundStyle(SF.muted)
+                Spacer()
+                Button(catalogBrowser.isDownloading ? "DOWNLOADING…" : "UPDATE CATALOG") {
+                    catalogBrowser.download()
+                }.font(.system(size: 8, weight: .black, design: .monospaced))
+                    .foregroundStyle(gold).disabled(catalogBrowser.isDownloading)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                let coverage = MinecraftBedrockItemIcons.bundledCoverage(for: catalogBrowser.items.map { $0.id })
+                HStack {
+                    Text("BUNDLED PNG ICONS")
+                        .font(.system(size: 9, weight: .black, design: .monospaced)).foregroundStyle(SF.text)
+                    Spacer()
+                    Text("\(coverage.resolved) / \(coverage.total) ICONS")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(gold)
+                }
+                Text(coverage.total == 0
+                     ? "Load the Bedrock catalog to check bundled icon coverage."
+                     : "\(coverage.resolved) catalog IDs resolve to bundled PNG images.")
+                    .font(.system(size: 8, design: .monospaced)).foregroundStyle(SF.muted)
+            }.padding(12).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if catalogBrowser.items.isEmpty {
+                Button("DOWNLOAD FULL BEDROCK CATALOG") {
+                    catalogBrowser.download()
+                }.font(.system(size: 10, weight: .black, design: .monospaced))
+                    .foregroundStyle(.black).frame(maxWidth: .infinity).padding(13)
+                    .background(gold).clipShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                Text("\(catalogBrowser.filteredItems.count) ITEMS").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(gold)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 4), spacing: 8) {
+                    ForEach(catalogBrowser.filteredItems) { item in
+                        Button {
+                            showCatalogAdd(item.name)
+                        } label: {
+                            VStack(spacing: 5) {
+                                MinecraftBedrockItemIconView(textureKey: item.id).frame(width: 38, height: 38)
+                                Text(item.displayName.uppercased())
+                                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(SF.text).lineLimit(2).multilineTextAlignment(.center).frame(height: 20)
+                            }.frame(maxWidth: .infinity).padding(7).background(SF.panel)
+                                .clipShape(RoundedRectangle(cornerRadius: 9))
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+            statusPanel(playerSnapshot == nil ? "INVENTORY DATA NOT FOUND" : "INVENTORY EDITING · LIMITED", playerSnapshot == nil ? "No local-player record was found in the recovered database records." : "Existing stack removals and quantity changes now update the visible hotbar and all 27 main-inventory slots immediately. Catalog additions and their staged quantities are also reflected in the slot grid. Moving existing stacks between empty slots (including hotbar placement) is now supported. Enchantment editing remains unavailable and existing enchantment metadata is preserved. All changes remain staged until EXPORT EDITED WORLD.")
+            MinecraftCatalogStatusView()
+        }
+    }
+
+    private var worldSettingsWorkspace: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("WORLD IDENTITY")
+            let storedWorldName = levelDocument?.worldName ?? MinecraftWorldImportStore.currentWorldName ?? "—"
+            let displayedWorldName = editSession.levelEdits["LevelName"] ?? storedWorldName
+            editorField("World Name", value: displayedWorldName, detail: editSession.levelEdits["LevelName"] == nil ? "Name from level.dat · TAP TO EDIT" : "CHANGE STAGED · TAP TO EDIT")
+            lockedSeedField(value: levelDocument?.seed.map(String.init) ?? "UNAVAILABLE")
+            sectionLabel("GAMEPLAY SETTINGS")
+            worldChoiceRow("GAME MODE", options: [("Survival", "0"), ("Creative", "1"), ("Adventure", "2"), ("Spectator", "6")], key: "GameType", current: String(levelDocument?.gameType ?? 0))
+            worldChoiceRow("DIFFICULTY", options: [("Peaceful", "0"), ("Easy", "1"), ("Normal", "2"), ("Hard", "3")], key: "Difficulty", current: String(levelDocument?.difficulty ?? 2))
+            worldSwitchRow("CHEATS ENABLED", key: "commandsEnabled", current: levelBooleanRaw("commandsEnabled") ?? "0")
+            worldChoiceRow("WEATHER", options: [("Clear", "0.0"), ("Rain", "1.0")], key: "rainLevel", current: levelFloatRaw("rainLevel") ?? "0.0")
+            worldChoiceRow("TIME OF DAY", options: [("Dawn", "0"), ("Morning", "1000"), ("Noon", "6000"), ("Sunset", "12000"), ("Night", "13000"), ("Midnight", "18000")], key: "Time", current: levelLongRaw("Time") ?? "0")
+            sectionLabel("GAMERULES")
+            ForEach(worldGameRuleLabels, id: \.self) { label in
+                let key = worldGameRuleKey(label)
+                worldSwitchRow(label.uppercased(), key: "GameRules.\(key)", current: levelRuleRaw(key) ?? (["keepInventory":"0", "mobGriefing":"1", "doDaylightCycle":"1", "doMobSpawning":"1", "doFireTick":"1", "naturalRegeneration":"1", "doEntityDrops":"1"][key] ?? "1"))
+            }
+            statusPanel(levelDocument == nil ? "WORLD SETTINGS UNAVAILABLE" : (editSession.levelEdits.isEmpty ? "WORLD SETTINGS · READY" : "WORLD SETTINGS · STAGED"), levelDocument == nil ? "Could not decode the imported level.dat file." : "Use switches and buttons to stage changes. All edits remain staged until EXPORT EDITED WORLD. The original world is never modified. The world seed remains read-only.")
+        }
+    }
+
+    private func worldSwitchRow(_ title: String, key: String, current: String) -> some View {
+        let staged = editSession.levelEdits[key] ?? current
+        let isOn = staged != "0"
+        return HStack {
+            Text(title).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundStyle(SF.text)
+            Spacer()
+            if editSession.levelEdits[key] != nil { Text("STAGED").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(gold) }
+            Toggle("", isOn: Binding(get: { isOn }, set: { editSession.stageLevel(key, value: $0 ? "1" : "0") }))
+                .labelsHidden().tint(gold)
+        }.padding(11).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 9))
+    }
+
+    private func worldChoiceRow(_ title: String, options: [(String, String)], key: String, current: String) -> some View {
+        let selected = editSession.levelEdits[key] ?? current
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text(title).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundStyle(SF.text)
+                Spacer()
+                if editSession.levelEdits[key] != nil { Text("STAGED").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(gold) }
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 6)], spacing: 6) {
+                ForEach(options, id: \.1) { option in
+                    Button { editSession.stageLevel(key, value: option.1) } label: {
+                        Text(option.0.uppercased()).font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(selected == option.1 ? Color.black : SF.text)
+                            .frame(maxWidth: .infinity).padding(.vertical, 9)
+                            .background(selected == option.1 ? gold : SF.panel)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                    }.buttonStyle(.plain)
+                }
+            }
+        }.padding(11).background(SF.panel.opacity(0.65)).clipShape(RoundedRectangle(cornerRadius: 9))
+    }
+
+    private var worldGameRuleLabels: [String] { ["Keep inventory", "Mob griefing", "Daylight cycle", "Mob spawning", "Fire spreads", "Natural regeneration", "Do entity drops"] }
+    private func worldGameRuleKey(_ label: String) -> String {
+        ["Keep inventory":"keepInventory", "Mob griefing":"mobGriefing", "Daylight cycle":"doDaylightCycle", "Mob spawning":"doMobSpawning", "Fire spreads":"doFireTick", "Natural regeneration":"naturalRegeneration", "Do entity drops":"doEntityDrops"][label] ?? ""
+    }
+
+    private func stagedLevelLabel(_ key: String, fallback: String) -> String {
+        guard let raw = editSession.levelEdits[key] else { return fallback }
+        let display: String
+        if key == "GameType", let value = Int(raw) { display = [0:"SURVIVAL",1:"CREATIVE",2:"ADVENTURE",6:"SPECTATOR"][value] ?? raw }
+        else if key == "Difficulty", let value = Int(raw) { display = [0:"PEACEFUL",1:"EASY",2:"NORMAL",3:"HARD"][value] ?? raw }
+        else if key == "commandsEnabled" { display = raw == "1" ? "ON" : "OFF" }
+        else if key == "Time", let value = Int64(raw) { display = "\(value) TICKS" }
+        else { display = raw }
+        return display + " · STAGED"
+    }
+
+    private var levelTimeLabel: String {
+        guard case .long(let value)? = levelDocument?.value("Time") else { return "UNAVAILABLE" }
+        return "\(value) TICKS"
+    }
+
+    private func levelBooleanLabel(_ key: String) -> String {
+        switch levelDocument?.value(key) {
+        case .byte(let value): return value == 0 ? "OFF" : "ON"
+        case .int(let value): return value == 0 ? "OFF" : "ON"
+        default: return "UNAVAILABLE"
+        }
+    }
+
+    private var stagedWeatherLabel: String {
+        if let rain = editSession.levelEdits["rainLevel"] { return "RAIN \(rain)" }
+        guard case .float(let rain)? = levelDocument?.value("rainLevel") else { return "UNAVAILABLE" }
+        return rain > 0 ? "RAINING · \(rain)" : "CLEAR"
+    }
+
+    private func levelRuleLabel(_ key: String) -> String {
+        if case .compound(let rules)? = levelDocument?.value("GameRules"), let value = rules[key] {
+            switch value {
+            case .byte(let n): return n == 0 ? "OFF" : "ON"
+            case .int(let n): return n == 0 ? "OFF" : "ON"
+            default: return "UNSUPPORTED"
+            }
+        }
+        let defaults: [String: Bool] = [
+            "keepInventory": false, "mobGriefing": true, "doDaylightCycle": true,
+            "doMobSpawning": true, "doFireTick": true,
+            "naturalRegeneration": true, "doEntityDrops": true
+        ]
+        guard let value = defaults[key] else { return "UNAVAILABLE" }
+        return (value ? "ON" : "OFF") + " · DEFAULT"
+    }
+
+    private func stagedRuleLabel(_ key: String, fallback: String) -> String {
+        guard let raw = editSession.levelEdits["GameRules.\(key)"] else { return fallback }
+        return raw == "0" ? "OFF · STAGED" : "ON · STAGED"
+    }
+
+    private var worldDataWorkspace: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("WORLD INFORMATION")
+            editorField("World Name", value: levelDocument?.worldName ?? MinecraftWorldImportStore.currentWorldName ?? "—", detail: "Name from level.dat")
+            lockedSeedField(value: levelDocument?.seed.map(String.init) ?? "UNAVAILABLE")
+            editorField("Storage Version", value: levelDocument.map { String($0.headerVersion) } ?? "UNAVAILABLE", detail: "level.dat header version")
+            editorField("Last Played", value: "Not decoded", detail: "World metadata")
+            sectionLabel("WORLD PROPERTIES")
+            optionRow("World spawn", value: "Not shown")
+            optionRow("Experiments", value: "—")
+            optionRow("Resource packs", value: "—")
+            statusPanel(levelDocument == nil ? "METADATA UNAVAILABLE" : "METADATA · READ ONLY", levelDocument == nil ? "Could not decode the imported world's level.dat file." : "World name, seed, and header version are now read from the imported level.dat. Editing and export remain disabled until safe write-back is implemented.")
+        }
+    }
+
+    private var safeModeFooter: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "lock.shield.fill")
+            Text("SAFE MODE · ORIGINAL WORLD IS NOT MODIFIED")
+        }.font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(gold).padding(.top, 5)
+    }
+
+    private func sectionLabel(_ value: String) -> some View {
+        Text(value).font(.system(size: 10, weight: .black, design: .monospaced)).foregroundStyle(gold).padding(.top, 5)
+    }
+
+    private func lockedSeedField(value: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "lock.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(gold)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("WORLD SEED · LOCKED").font(.system(size: 9, weight: .black, design: .monospaced)).foregroundStyle(SF.text)
+                Text("Read-only. Changing the seed can affect world generation and damage an existing world.")
+                    .font(.system(size: 9)).foregroundStyle(SF.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            Text(value).font(.system(size: 11, weight: .bold, design: .monospaced)).foregroundStyle(gold)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .padding(11)
+        .background(SF.panel.opacity(0.7))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(gold.opacity(0.35), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("World seed, locked, read only. \(value). Changing the seed can affect world generation.")
+    }
+
+    private func editorField(_ title: String, value: String, detail: String) -> some View {
+        Button {
+            if section.id == "player" { showPlayerEditor(title, currentValue: stagedValue(for: title) ?? value) }
+            else if section.id == "world" && title == "World Name" { showLevelEditor("LevelName", title: title, currentValue: value) }
+            else { showUnavailable(title) }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title.uppercased()).font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(SF.text)
+                    Text(detail).font(.system(size: 9)).foregroundStyle(SF.muted)
+                }
+                Spacer()
+                Text(value).font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundStyle(gold)
+                    .padding(.horizontal, 12).padding(.vertical, 8).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 8))
+                Image(systemName: "info.circle").font(.system(size: 10)).foregroundStyle(SF.muted)
+            }.padding(11).background(SF.panel.opacity(0.7)).clipShape(RoundedRectangle(cornerRadius: 10))
+        }.buttonStyle(.plain)
+    }
+
+    private func levelBooleanRaw(_ key: String) -> String? {
+        switch levelDocument?.value(key) { case .byte(let n): return String(n); case .int(let n): return String(n); default: return nil }
+    }
+    private func levelFloatRaw(_ key: String) -> String? {
+        if case .float(let n)? = levelDocument?.value(key) { return String(n) }; return nil
+    }
+    private func levelLongRaw(_ key: String) -> String? {
+        if case .long(let n)? = levelDocument?.value(key) { return String(n) }
+        if case .int(let n)? = levelDocument?.value(key) { return String(n) }; return nil
+    }
+    private func levelRuleRaw(_ key: String) -> String? {
+        guard case .compound(let rules)? = levelDocument?.value("GameRules"), let value = rules[key] else { return nil }
+        switch value { case .byte(let n): return String(n); case .int(let n): return String(n); default: return nil }
+    }
+
+    private func optionRow(_ title: String, value: String) -> some View {
+        Button {
+            if section.id == "world" {
+                let mapping: [String: (String, String)] = [
+                    "Game mode": ("GameType", String(levelDocument?.gameType ?? 0)),
+                    "Difficulty": ("Difficulty", String(levelDocument?.difficulty ?? 2)),
+                    "Cheats enabled": ("commandsEnabled", levelBooleanRaw("commandsEnabled") ?? "0"),
+                    "Weather": ("rainLevel", levelFloatRaw("rainLevel") ?? "0.0"),
+                    "Time of day": ("Time", levelLongRaw("Time") ?? "0")
+                ]
+                if let entry = mapping[title] {
+                    let current = editSession.levelEdits[entry.0] ?? entry.1
+                    showLevelEditor(entry.0, title: title + (title == "Game mode" ? " (0 Survival, 1 Creative, 2 Adventure, 6 Spectator)" : title == "Difficulty" ? " (0 Peaceful, 1 Easy, 2 Normal, 3 Hard)" : title == "Time of day" ? " (ticks)" : ""), currentValue: current)
+                } else if worldGameRuleLabels.contains(title) {
+                    let key = worldGameRuleKey(title)
+                    let defaults = ["keepInventory":"0", "mobGriefing":"1", "doDaylightCycle":"1", "doMobSpawning":"1", "doFireTick":"1", "naturalRegeneration":"1", "doEntityDrops":"1"]
+                    let current = levelRuleRaw(key) ?? defaults[key] ?? "1"
+                    showLevelEditor("GameRules.\(key)", title: title + " (0 Off / 1 On)", currentValue: editSession.levelEdits["GameRules.\(key)"] ?? current)
+                } else { showUnavailable(title) }
+            } else { showUnavailable(title) }
+        } label: {
+            HStack {
+                Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(SF.text)
+                Spacer()
+                Text(value).font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(SF.muted)
+                Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold)).foregroundStyle(SF.muted)
+            }.padding(11).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 9))
+        }.buttonStyle(.plain)
+    }
+
+    private func showPlayerEditor(_ title: String, currentValue: String) {
+        let field: MinecraftPlayerEditService.Field
+        switch title.lowercased() {
+        case "health": field = .health
+        case "maximum health": field = .maximumHealth
+        case "hunger": field = .hunger
+        case "saturation": field = .saturation
+        case "xp level": field = .xpLevel
+        default: showUnavailable(title); return
+        }
+        let alert = UIAlertController(title: "EDIT \(title.uppercased())", message: "This change will be staged in the current editing session. Export once when all edits are complete.", preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.keyboardType = field == .xpLevel ? .numberPad : .decimalPad
+            textField.text = currentValue == "UNAVAILABLE" ? (field == .maximumHealth ? "20" : "0") : currentValue
+            textField.placeholder = "Enter value"
+        }
+        alert.addAction(UIAlertAction(title: "CANCEL", style: .cancel))
+        alert.addAction(UIAlertAction(title: "STAGE CHANGE", style: .default) { _ in
+            guard let raw = alert.textFields?.first?.text,
+                  let number = Double(raw.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                self.presentPlayerResult(title: "INVALID VALUE", message: "Enter a valid number.")
+                return
+            }
+            self.editSession.stage(field, value: number)
+        })
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private func showCatalogAdd(_ key: String) {
+        guard let snapshot = playerSnapshot else {
+            presentPlayerResult(title: "NO PLAYER DATA", message: "Import a Bedrock world and load its player inventory before adding items.")
+            return
+        }
+        let occupied = Set(snapshot.inventory.filter { !$0.identifier.isEmpty && $0.count > 0 }.map(\.slot))
+            .subtracting(editSession.removedInventorySlots)
+            .union(editSession.inventoryAdditions.keys)
+        guard let slot = (0..<36).first(where: { !occupied.contains($0) }) else {
+            presentPlayerResult(title: "INVENTORY FULL", message: "No empty inventory slot is available. Remove an existing stack or free a slot first.")
+            return
+        }
+        let alert = UIAlertController(title: "ADD \(key.replacingOccurrences(of: "_", with: " ").uppercased())", message: "This item will be staged in inventory slot \(slot + 1). It will not change the imported world until you export.", preferredStyle: .alert)
+        alert.addTextField { field in
+            field.keyboardType = .numberPad
+            field.text = "1"
+            field.placeholder = "Quantity (1–64)"
+        }
+        alert.addAction(UIAlertAction(title: "CANCEL", style: .cancel))
+        alert.addAction(UIAlertAction(title: "ADD TO INVENTORY", style: .default) { _ in
+            guard let raw = alert.textFields?.first?.text, let count = Int(raw), (1...64).contains(count) else {
+                self.presentPlayerResult(title: "INVALID QUANTITY", message: "Enter a quantity from 1 to 64.")
+                return
+            }
+            self.editSession.stageInventoryAddition(MinecraftStagedInventoryAddition(identifier: "minecraft:\(key)", slot: slot, count: count))
+        })
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private func showStagedInventoryEditor(_ item: MinecraftPlayerInventoryItem) {
+        let title = item.identifier.replacingOccurrences(of: "minecraft:", with: "").replacingOccurrences(of: "_", with: " ").uppercased()
+        let alert = UIAlertController(title: title + " · STAGED", message: "Edit or remove this item from the pending inventory changes.", preferredStyle: .alert)
+        alert.addTextField { field in
+            field.keyboardType = .numberPad
+            field.text = String(item.count)
+            field.placeholder = "Stack quantity (1–64)"
+        }
+        alert.addAction(UIAlertAction(title: "CANCEL", style: .cancel))
+        alert.addAction(UIAlertAction(title: "REMOVE ITEM", style: .destructive) { _ in
+            editSession.removeInventorySlot(item.slot)
+        })
+        alert.addAction(UIAlertAction(title: "UPDATE QUANTITY", style: .default) { _ in
+            guard let raw = alert.textFields?.first?.text, let count = Int(raw), (1...64).contains(count) else {
+                presentPlayerResult(title: "INVALID QUANTITY", message: "Enter a stack quantity from 1 to 64.")
+                return
+            }
+            editSession.stageInventoryAdditionCount(slot: item.slot, count: count)
+        })
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private func showInventoryEditor(_ item: MinecraftPlayerInventoryItem) {
+        let name = item.identifier.replacingOccurrences(of: "minecraft:", with: "")
+        let alert = UIAlertController(title: name.replacingOccurrences(of: "_", with: " ").uppercased(), message: "Edit this existing stack. Changes are staged until the single world export.", preferredStyle: .alert)
+        alert.addTextField { field in field.keyboardType = .numberPad; field.text = String(editSession.inventoryCounts[item.slot] ?? item.count); field.placeholder = "Stack quantity (1–64)" }
+        alert.addAction(UIAlertAction(title: "CANCEL", style: .cancel))
+        alert.addAction(UIAlertAction(title: "REMOVE STACK", style: .destructive) { _ in editSession.removeInventorySlot(item.slot) })
+        alert.addAction(UIAlertAction(title: "MOVE TO SLOT…", style: .default) { _ in
+            self.askForInventoryDestination(source: item.slot)
+        })
+        alert.addAction(UIAlertAction(title: "SWAP WITH SLOT…", style: .default) { _ in
+            self.askForInventorySwap(source: item.slot)
+        })
+        alert.addAction(UIAlertAction(title: "STAGE QUANTITY", style: .default) { _ in
+            guard let raw = alert.textFields?.first?.text, let count = Int(raw), (1...64).contains(count) else { presentPlayerResult(title: "INVALID QUANTITY", message: "Enter a stack quantity from 1 to 64."); return }
+            editSession.stageInventoryCount(slot: item.slot, count: count)
+        })
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private func showMoveIntoEmptySlot(_ destination: Int) {
+        guard effectiveInventoryItem(at: destination) == nil else { return }
+        let alert = UIAlertController(title: "MOVE ITEM HERE", message: "Enter the source slot number (1–36). The destination is slot \(destination + 1). Only an existing stack can be moved.", preferredStyle: .alert)
+        alert.addTextField { field in
+            field.keyboardType = .numberPad
+            field.placeholder = "Source slot (1–36)"
+        }
+        alert.addAction(UIAlertAction(title: "CANCEL", style: .cancel))
+        alert.addAction(UIAlertAction(title: "MOVE HERE", style: .default) { _ in
+            guard let raw = alert.textFields?.first?.text, let number = Int(raw), (1...36).contains(number) else {
+                self.presentPlayerResult(title: "INVALID SLOT", message: "Enter a source slot from 1 to 36.")
+                return
+            }
+            let source = number - 1
+            guard self.effectiveInventoryItem(at: source) != nil else {
+                self.presentPlayerResult(title: "EMPTY SOURCE", message: "The selected source slot has no item.")
+                return
+            }
+            guard self.editSession.inventoryAdditions[source] == nil else {
+                self.presentPlayerResult(title: "STAGED ITEM", message: "Move existing world items only. Staged catalog additions can be placed directly into an empty slot.")
+                return
+            }
+            self.editSession.stageInventoryMove(from: source, to: destination)
+        })
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private func askForInventorySwap(source: Int) {
+        let alert = UIAlertController(title: "SWAP INVENTORY SLOTS", message: "Enter the other occupied slot number (1–36). Both items will exchange positions.", preferredStyle: .alert)
+        alert.addTextField { field in
+            field.keyboardType = .numberPad
+            field.placeholder = "Other slot (1–36)"
+        }
+        alert.addAction(UIAlertAction(title: "CANCEL", style: .cancel))
+        alert.addAction(UIAlertAction(title: "SWAP", style: .default) { _ in
+            guard let raw = alert.textFields?.first?.text, let number = Int(raw), (1...36).contains(number) else {
+                self.presentPlayerResult(title: "INVALID SLOT", message: "Enter a slot number from 1 to 36.")
+                return
+            }
+            let other = number - 1
+            guard other != source else {
+                self.presentPlayerResult(title: "SAME SLOT", message: "Choose a different occupied slot.")
+                return
+            }
+            guard self.effectiveInventoryItem(at: other) != nil else {
+                self.presentPlayerResult(title: "EMPTY SLOT", message: "Slot \(number) has no item to swap.")
+                return
+            }
+            self.editSession.stageInventorySwap(first: source, second: other)
+        })
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private func askForInventoryDestination(source: Int) {
+        let alert = UIAlertController(title: "MOVE ITEM", message: "Enter an empty destination slot number (1–36).", preferredStyle: .alert)
+        alert.addTextField { field in
+            field.keyboardType = .numberPad
+            field.placeholder = "Destination slot (1–36)"
+        }
+        alert.addAction(UIAlertAction(title: "CANCEL", style: .cancel))
+        alert.addAction(UIAlertAction(title: "MOVE", style: .default) { _ in
+            guard let raw = alert.textFields?.first?.text, let number = Int(raw), (1...36).contains(number) else {
+                self.presentPlayerResult(title: "INVALID SLOT", message: "Enter a destination slot from 1 to 36.")
+                return
+            }
+            let destination = number - 1
+            guard self.effectiveInventoryItem(at: destination) == nil else {
+                self.presentPlayerResult(title: "DESTINATION OCCUPIED", message: "Choose an empty inventory slot. Moving onto occupied stacks is not supported yet.")
+                return
+            }
+            self.editSession.stageInventoryMove(from: source, to: destination)
+        })
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private func showLevelEditor(_ key: String, title: String, currentValue: String) {
+        let alert = UIAlertController(title: "EDIT \(title.uppercased())", message: "This setting will be staged and written into the exported world copy.", preferredStyle: .alert)
+        alert.addTextField { field in field.text = editSession.levelEdits[key] ?? currentValue; field.placeholder = "Enter value" }
+        alert.addAction(UIAlertAction(title: "CANCEL", style: .cancel))
+        alert.addAction(UIAlertAction(title: "STAGE CHANGE", style: .default) { _ in
+            guard let value = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return }
+            editSession.stageLevel(key, value: value)
+        })
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private func stagedValue(for title: String) -> String? {
+        let field: MinecraftPlayerEditService.Field
+        switch title.lowercased() {
+        case "health": field = .health
+        case "maximum health": field = .maximumHealth
+        case "hunger": field = .hunger
+        case "saturation": field = .saturation
+        case "xp level": field = .xpLevel
+        default: return nil
+        }
+        guard let value = editSession.playerEdits[field] else { return nil }
+        return field == .xpLevel ? String(Int(value)) : String(format: "%.1f", value)
+    }
+
+    private func presentPlayerResult(title: String, message: String) {
+        let result = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        result.addAction(UIAlertAction(title: "OK", style: .default))
+        UIApplication.shared.topMostViewController?.present(result, animated: true)
+    }
+
+    private func showUnavailable(_ field: String) {
+        let message: String
+        switch section.id {
+        case "player":
+            message = "\(field) is waiting for the local-player NBT reader and validated database writer. No game data has been changed."
+        case "inventory":
+            message = "\(field) is a catalog preview only. Actual slot contents and item changes require the Bedrock player-record reader/writer. No game data has been changed."
+        case "world":
+            message = "\(field) is not connected to writable Bedrock world data yet. No game data has been changed."
+        default:
+            message = "\(field) is not yet connected to the imported world's decoded level.dat data. No game data has been changed."
+        }
+        let alert = UIAlertController(title: field.uppercased(), message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        UIApplication.shared.topMostViewController?.present(alert, animated: true)
+    }
+
+    private func statusPanel(_ title: String, _ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 7) {
+                Image(systemName: "lock.fill").font(.system(size: 10))
+                Text(title).font(.system(size: 10, weight: .black, design: .monospaced))
+            }.foregroundStyle(gold)
+            Text(message).font(.system(size: 10)).foregroundStyle(SF.muted).lineSpacing(3)
+        }.padding(13).frame(maxWidth: .infinity, alignment: .leading)
+            .background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay { RoundedRectangle(cornerRadius: 12).stroke(gold.opacity(0.3), lineWidth: 1) }
+    }
+}
+
+private struct MinecraftBedrockItemIconView: UIViewRepresentable {
+    let textureKey: String
+
+    final class Coordinator {
+        var requestedKey = ""
+        var requestID = UUID()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UIImageView {
+        let view = UIImageView()
+        view.contentMode = .scaleAspectFit
+        view.backgroundColor = .clear
+        view.tintColor = UIColor(white: 0.62, alpha: 1)
+        load(textureKey, into: view, coordinator: context.coordinator)
+        return view
+    }
+
+    func updateUIView(_ view: UIImageView, context: Context) {
+        let normalized = textureKey.lowercased()
+        guard context.coordinator.requestedKey != normalized else { return }
+        load(normalized, into: view, coordinator: context.coordinator)
+    }
+
+    private func load(_ key: String, into view: UIImageView, coordinator: Coordinator) {
+        let normalized = key.lowercased()
+        coordinator.requestedKey = normalized
+        let requestID = UUID()
+        coordinator.requestID = requestID
+        let bundledOrCached = MinecraftBedrockItemIcons.cachedImage(for: normalized)
+        view.image = bundledOrCached ?? UIImage(systemName: "shippingbox")
+        guard bundledOrCached == nil else { return }
+
+        MinecraftBedrockItemIcons.image(for: normalized) { [weak view, weak coordinator] image in
+            DispatchQueue.main.async {
+                guard let view, let coordinator,
+                      coordinator.requestID == requestID,
+                      coordinator.requestedKey == normalized else { return }
+                view.image = image ?? UIImage(systemName: "shippingbox")
+            }
+        }
+    }
+}
+
+private struct MinecraftBrowserItem: Identifiable {
+    let id: String
+    let name: String
+    let displayName: String
+    let stackSize: Int
+    let category: String
+}
+
+// MARK: - Minecraft catalog browser
+private final class MinecraftCatalogBrowserModel: ObservableObject {
+    static let shared = MinecraftCatalogBrowserModel()
+    @Published private(set) var items: [MinecraftBrowserItem] = []
+    @Published var searchText = ""
+    @Published var selectedCategory = "All"
+    @Published private(set) var isDownloading = false
+    @Published private(set) var status = "Download catalogs to install the full Bedrock item list."
+
+    let categories = ["All", "Tools", "Construction", "Nature", "Equipment", "Items"]
+
+    func load() {
+        let url = MinecraftCatalogManager.directory.appendingPathComponent("items.json")
+        guard let data = try? Data(contentsOf: url),
+              let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            items = []
+            status = "Full catalog not installed. Download catalogs to continue."
+            return
+        }
+        let parsed: [MinecraftBrowserItem] = rows.compactMap { row in
+            guard let name = row["name"] as? String, !name.isEmpty else { return nil }
+            let normalizedName = name.lowercased().replacingOccurrences(of: "minecraft:", with: "")
+            let nonInventoryRecords: Set<String> = [
+                "air", "client_request_placeholder_block", "info_update", "info_update2",
+                "invisible_bedrock", "reserved6", "unknown"
+            ]
+            guard !nonInventoryRecords.contains(normalizedName),
+                  !Self.isEducationItem(normalizedName) else { return nil }
+            let display = row["displayName"] as? String ?? name.replacingOccurrences(of: "_", with: " ").capitalized
+            let stack = (row["stackSize"] as? NSNumber)?.intValue ?? 64
+            guard stack > 0 else { return nil }
+            return MinecraftBrowserItem(id: name, name: name, displayName: display, stackSize: min(64, max(1, stack)), category: Self.category(name, display))
+        }
+        var seen = Set<String>()
+        items = parsed.filter { seen.insert($0.id).inserted }.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        status = "\(items.count) Bedrock items available · offline catalog"
+    }
+
+    var filteredItems: [MinecraftBrowserItem] {
+        items.filter { item in
+            let categoryMatch = selectedCategory == "All" || item.category == selectedCategory
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let searchMatch = query.isEmpty || item.displayName.localizedCaseInsensitiveContains(query) || item.name.localizedCaseInsensitiveContains(query)
+            return categoryMatch && searchMatch
+        }
+    }
+
+    func download() {
+        guard !isDownloading else { return }
+        isDownloading = true
+        status = "Downloading Bedrock item and block catalogs…"
+        MinecraftCatalogManager.downloadAll { [weak self] result in
+            DispatchQueue.main.async {
+                self?.isDownloading = false
+                self?.load()
+                self?.status = result
+            }
+        }
+    }
+
+    private static func isEducationItem(_ identifier: String) -> Bool {
+        let educationItems: Set<String> = [
+            "bleach", "chemical_heat", "chemistry_table", "compound",
+            "compound_creator", "element_constructor", "lab_table",
+            "material_reducer", "medicine", "rapid_fertilizer",
+            "sparkler", "ice_bomb", "glow_stick"
+        ]
+        let isPeriodicTableElement: Bool
+        if identifier.hasPrefix("element_") {
+            let number = identifier.dropFirst("element_".count)
+            isPeriodicTableElement = !number.isEmpty && number.allSatisfy(\.isNumber)
+        } else {
+            isPeriodicTableElement = false
+        }
+
+        return educationItems.contains(identifier)
+            || identifier.hasPrefix("compound_")
+            || isPeriodicTableElement
+    }
+
+    private static func category(_ name: String, _ display: String) -> String {
+        let n = name.lowercased().replacingOccurrences(of: "minecraft:", with: "")
+        let tools = ["pickaxe","axe","shovel","hoe","sword","bow","crossbow","trident","fishing_rod","shears","flint_and_steel","brush","spyglass","compass","clock","lead","fishing"]
+        if tools.contains(where: { n.contains($0) }) { return "Tools" }
+        let equipment = ["helmet","chestplate","leggings","boots","elytra","shield","horse_armor","saddle","turtle_helmet","totem","carved_pumpkin"]
+        if equipment.contains(where: { n.contains($0) }) { return "Equipment" }
+        let nature = ["sapling","flower","leaves","log","wood","seed","seeds","crop","wheat","carrot","potato","beetroot","dye","coral","fish","egg","mushroom","vine","grass","fern","dirt","sand","gravel","clay","ore","raw_","ice","snow","kelp","seagrass","cactus","sugar_cane","bamboo"]
+        if nature.contains(where: { n.contains($0) }) { return "Nature" }
+        let construction = ["stone","planks","brick","stairs","slab","wall","fence","door","trapdoor","glass","concrete","terracotta","wool","copper","cobblestone","deepslate","lantern","torch","chain","bar","chest","shelf","button","pressure_plate","sign","hanging_sign","ladder","scaffolding","block"]
+        if construction.contains(where: { n.contains($0) }) { return "Construction" }
+        return "Items"
+    }
+}
+
+private struct MinecraftCatalogStatusView: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
+    var body: some View {
+        let count = MinecraftCatalogManager.installedCount
+        VStack(alignment: .leading, spacing: 7) {
+            Text("OFFLINE CATALOGS").font(.system(size: 10, weight: .black, design: .monospaced)).foregroundStyle(SF.text)
+            Text("\(count)/3 catalog files installed").font(.system(size: 11, design: .monospaced)).foregroundStyle(SF.farmGold)
+            Text("Items · Enchantments · Blocks").font(.system(size: 10)).foregroundStyle(SF.muted)
+        }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(SF.panel)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+// MARK: - Minecraft catalog manager
+private enum MinecraftCatalogManager {
+    private static let bedrockVersion = "1.26.0"
+    private static let files = ["items", "enchantments", "blocks"]
+    private static let bedrockEnchantmentsJSON = #"""
+{
+  "formatVersion": 1,
+  "edition": "bedrock",
+  "catalogVersion": "Bedrock 1.26.x reference",
+  "source": "Bedrock Wiki enchantment identifiers and Bedrock Edition numeric IDs",
+  "enchantments": [
+    {
+      "id": 0,
+      "identifier": "protection",
+      "name": "Protection",
+      "maxLevel": 4,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 1,
+      "identifier": "fire_protection",
+      "name": "Fire Protection",
+      "maxLevel": 4,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 2,
+      "identifier": "feather_falling",
+      "name": "Feather Falling",
+      "maxLevel": 4,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 3,
+      "identifier": "blast_protection",
+      "name": "Blast Protection",
+      "maxLevel": 4,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 4,
+      "identifier": "projectile_protection",
+      "name": "Projectile Protection",
+      "maxLevel": 4,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 5,
+      "identifier": "thorns",
+      "name": "Thorns",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 6,
+      "identifier": "respiration",
+      "name": "Respiration",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 7,
+      "identifier": "depth_strider",
+      "name": "Depth Strider",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 8,
+      "identifier": "aqua_affinity",
+      "name": "Aqua Affinity",
+      "maxLevel": 1,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 9,
+      "identifier": "sharpness",
+      "name": "Sharpness",
+      "maxLevel": 5,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 10,
+      "identifier": "smite",
+      "name": "Smite",
+      "maxLevel": 5,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 11,
+      "identifier": "bane_of_arthropods",
+      "name": "Bane of Arthropods",
+      "maxLevel": 5,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 12,
+      "identifier": "knockback",
+      "name": "Knockback",
+      "maxLevel": 2,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 13,
+      "identifier": "fire_aspect",
+      "name": "Fire Aspect",
+      "maxLevel": 2,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 14,
+      "identifier": "looting",
+      "name": "Looting",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 15,
+      "identifier": "efficiency",
+      "name": "Efficiency",
+      "maxLevel": 5,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 16,
+      "identifier": "silk_touch",
+      "name": "Silk Touch",
+      "maxLevel": 1,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 17,
+      "identifier": "unbreaking",
+      "name": "Unbreaking",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 18,
+      "identifier": "fortune",
+      "name": "Fortune",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 19,
+      "identifier": "power",
+      "name": "Power",
+      "maxLevel": 5,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 20,
+      "identifier": "punch",
+      "name": "Punch",
+      "maxLevel": 2,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 21,
+      "identifier": "flame",
+      "name": "Flame",
+      "maxLevel": 1,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 22,
+      "identifier": "infinity",
+      "name": "Infinity",
+      "maxLevel": 1,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 23,
+      "identifier": "luck_of_the_sea",
+      "name": "Luck of the Sea",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 24,
+      "identifier": "lure",
+      "name": "Lure",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 25,
+      "identifier": "frost_walker",
+      "name": "Frost Walker",
+      "maxLevel": 2,
+      "treasure": true,
+      "curse": false
+    },
+    {
+      "id": 26,
+      "identifier": "mending",
+      "name": "Mending",
+      "maxLevel": 1,
+      "treasure": true,
+      "curse": false
+    },
+    {
+      "id": 27,
+      "identifier": "binding_curse",
+      "name": "Curse of Binding",
+      "maxLevel": 1,
+      "treasure": true,
+      "curse": true
+    },
+    {
+      "id": 28,
+      "identifier": "vanishing_curse",
+      "name": "Curse of Vanishing",
+      "maxLevel": 1,
+      "treasure": true,
+      "curse": true
+    },
+    {
+      "id": 29,
+      "identifier": "impaling",
+      "name": "Impaling",
+      "maxLevel": 5,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 30,
+      "identifier": "riptide",
+      "name": "Riptide",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 31,
+      "identifier": "loyalty",
+      "name": "Loyalty",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 32,
+      "identifier": "channeling",
+      "name": "Channeling",
+      "maxLevel": 1,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 33,
+      "identifier": "multishot",
+      "name": "Multishot",
+      "maxLevel": 1,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 34,
+      "identifier": "piercing",
+      "name": "Piercing",
+      "maxLevel": 4,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 35,
+      "identifier": "quick_charge",
+      "name": "Quick Charge",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 36,
+      "identifier": "soul_speed",
+      "name": "Soul Speed",
+      "maxLevel": 3,
+      "treasure": true,
+      "curse": false
+    },
+    {
+      "id": 37,
+      "identifier": "swift_sneak",
+      "name": "Swift Sneak",
+      "maxLevel": 3,
+      "treasure": true,
+      "curse": false
+    },
+    {
+      "id": 38,
+      "identifier": "wind_burst",
+      "name": "Wind Burst",
+      "maxLevel": 3,
+      "treasure": true,
+      "curse": false
+    },
+    {
+      "id": 39,
+      "identifier": "density",
+      "name": "Density",
+      "maxLevel": 5,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 40,
+      "identifier": "breach",
+      "name": "Breach",
+      "maxLevel": 4,
+      "treasure": false,
+      "curse": false
+    },
+    {
+      "id": 41,
+      "identifier": "lunge",
+      "name": "Lunge",
+      "maxLevel": 3,
+      "treasure": false,
+      "curse": false
+    }
+  ]
+}
+"""#
+
+    private static func sourceURL(for name: String) -> URL? {
+        guard name != "enchantments" else { return nil }
+        let path = "data/bedrock/\(bedrockVersion)/\(name).json"
+        return URL(string: "https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/\(path)")
+    }
+    static var directory: URL {
+        AppFileStore.documentsDirectory.appendingPathComponent("SAVEFORGE", isDirectory: true)
+            .appendingPathComponent("MinecraftBedrockCatalog", isDirectory: true)
+    }
+    static var installedCount: Int {
+        files.filter { name in
+            guard let data = try? Data(contentsOf: directory.appendingPathComponent(name + ".json")),
+                  let value = try? JSONSerialization.jsonObject(with: data) else { return false }
+            return value is [Any] || value is [String: Any]
+        }.count
+    }
+    static func downloadAll(completion: @escaping (String) -> Void) {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var successes: [String] = []
+        var failures: [String] = []
+
+        do {
+            let data = Data(bedrockEnchantmentsJSON.utf8)
+            let parsed = try JSONSerialization.jsonObject(with: data)
+            guard let object = parsed as? [String: Any],
+                  object["edition"] as? String == "bedrock",
+                  let enchantments = object["enchantments"] as? [[String: Any]],
+                  enchantments.count >= 37 else { throw NSError(domain: "SAVEFORGE.BedrockCatalog", code: 1) }
+            try data.write(to: directory.appendingPathComponent("enchantments.json"), options: .atomic)
+            successes.append("enchantments")
+        } catch {
+            failures.append("enchantments")
+        }
+
+        for name in ["items", "blocks"] {
+            group.enter()
+            guard let url = sourceURL(for: name) else {
+                lock.lock(); failures.append(name); lock.unlock()
+                group.leave()
+                continue
+            }
+            URLSession.shared.dataTask(with: url) { data, response, error in
+                defer { group.leave() }
+                guard let data = data, (response as? HTTPURLResponse)?.statusCode == 200,
+                      let json = try? JSONSerialization.jsonObject(with: data),
+                      json is [Any] || json is [String: Any] else {
+                    lock.lock(); failures.append(name); lock.unlock(); return
+                }
+                do {
+                    try data.write(to: directory.appendingPathComponent(name + ".json"), options: .atomic)
+                    lock.lock(); successes.append(name); lock.unlock()
+                } catch {
+                    lock.lock(); failures.append(name); lock.unlock()
+                }
+            }.resume()
+        }
+        group.notify(queue: .main) {
+            let successText = successes.sorted().joined(separator: ", ")
+            let failureText = failures.sorted().joined(separator: ", ")
+            var message = successes.isEmpty ? "No catalogs installed." : "Ready for offline use: \(successText)."
+            if !failureText.isEmpty { message += " Failed: \(failureText)." }
+            message += "\nItems and blocks: PrismarineJS Bedrock \(bedrockVersion)."
+            message += "\nEnchantments: bundled Bedrock-only catalog (\(itemsCount) identifiers); no Java data is used."
+            completion(message)
+        }
+    }
+    private static let itemsCount = 42
+}
+
+// MARK: - Minecraft Bedrock world importer
+// MARK: - Minecraft world import and storage
+private enum MinecraftWorldImportStore {
+    private static let worldNameKey = "saveforge.minecraft.currentWorldName"
+    private static let worldPathKey = "saveforge.minecraft.currentWorldPath"
+
+    static var currentWorldName: String? {
+        guard let url = currentWorldURL else { return nil }
+        return url.lastPathComponent
+    }
+
+    static var currentWorldURL: URL? {
+        guard let path = UserDefaults.standard.string(forKey: worldPathKey), !path.isEmpty else {
+            return nil
+        }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard isWorldFolder(url) else {
+            UserDefaults.standard.removeObject(forKey: worldNameKey)
+            UserDefaults.standard.removeObject(forKey: worldPathKey)
+            MinecraftEditorLoadModel.shared.reset()
+            MinecraftEditSession.shared.clear()
+            return nil
+        }
+        return url
+    }
+
+    static func clearCurrentWorld() {
+        UserDefaults.standard.removeObject(forKey: worldNameKey)
+        UserDefaults.standard.removeObject(forKey: worldPathKey)
+        MinecraftEditorLoadModel.shared.reset()
+        MinecraftEditSession.shared.clear()
+    }
+
+    private static var minecraftRoot: URL {
+        AppFileStore.importedDirectory.appendingPathComponent("Minecraft", isDirectory: true)
+    }
+
+    static func importArchive(_ archiveURL: URL) throws -> URL {
+        let staging = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SAVEFORGE-Minecraft-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: staging) }
+
+        try MinecraftZipExtractor.extract(archiveURL, to: staging)
+        guard let worldFolder = findWorldFolder(in: staging) else {
+            throw importError(20, "The archive was opened, but it doesn't contain a valid Bedrock world. A valid world needs level.dat and a db folder.")
+        }
+        return try installWorldFolder(worldFolder)
+    }
+
+    static func beginLevelDatImport(_ levelDatURL: URL) throws -> URL {
+        guard levelDatURL.lastPathComponent.caseInsensitiveCompare("level.dat") == .orderedSame else {
+            throw importError(21, "That isn't level.dat. Select a Minecraft Bedrock world's level.dat file.")
+        }
+        let staging = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SAVEFORGE-Minecraft-Level-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        let destination = staging.appendingPathComponent("level.dat")
+        try FileManager.default.copyItem(at: levelDatURL, to: destination)
+        return staging
+    }
+
+    static func finishLevelDatImport(staging: URL, dbFiles: [URL]) throws -> URL {
+        defer { try? FileManager.default.removeItem(at: staging) }
+        guard !dbFiles.isEmpty else {
+            throw importError(22, "No database files were selected. Select all files inside the world's db folder.")
+        }
+        let dbFolder = staging.appendingPathComponent("db", isDirectory: true)
+        try FileManager.default.createDirectory(at: dbFolder, withIntermediateDirectories: true)
+
+        for fileURL in dbFiles {
+            let hasAccess = fileURL.startAccessingSecurityScopedResource()
+            defer { if hasAccess { fileURL.stopAccessingSecurityScopedResource() } }
+            let name = fileURL.lastPathComponent
+            guard !name.isEmpty, name != ".", name != "..",
+                  !name.contains("/") else { continue }
+            let destination = dbFolder.appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                throw importError(23, "Two selected database files have the same name: \(name)")
+            }
+            try FileManager.default.copyItem(at: fileURL, to: destination)
+        }
+
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dbFolder.path)) ?? []
+        guard names.contains(where: { $0 == "CURRENT" || $0.hasPrefix("MANIFEST-") || $0.hasSuffix(".ldb") || $0.hasSuffix(".log") }) else {
+            throw importError(24, "The selected files don't look like a Minecraft LevelDB database. Select the contents of the db folder, not the folder itself.")
+        }
+        let installedWorld = try installWorldFolder(staging, preferredName: "Minecraft World")
+        let archiveURL = uniqueImportedWorldArchiveURL(name: installedWorld.lastPathComponent)
+        do {
+            try makeMCWorldArchive(from: installedWorld, to: archiveURL)
+        } catch {
+            try? FileManager.default.removeItem(at: archiveURL)
+            throw importError(26, "The world files were assembled, but SAVEFORGE couldn't create the .mcworld backup in Imported Files. Try importing the files again. Details: \(error.localizedDescription)")
+        }
+        return installedWorld
+    }
+
+    private static func uniqueImportedWorldArchiveURL(name: String) -> URL {
+        let base = name.isEmpty ? "Minecraft World" : name
+        var candidate = AppFileStore.importedDirectory.appendingPathComponent("\(base).mcworld")
+        if FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = AppFileStore.importedDirectory.appendingPathComponent("\(base)-\(Int(Date().timeIntervalSince1970)).mcworld")
+        }
+        return candidate
+    }
+
+    private static func makeMCWorldArchive(from worldFolder: URL, to archiveURL: URL) throws {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: worldFolder, includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey], options: []) else {
+            throw importError(27, "Could not read the assembled world folder.")
+        }
+        struct Entry { let name: Data; let bytes: Data; let crc: UInt32; let offset: UInt32; let isDirectory: Bool }
+        var archive = Data()
+        var entries: [Entry] = []
+        let rootPath = worldFolder.standardizedFileURL.path
+        for case let url as URL in enumerator {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey])
+            let relative = String(url.standardizedFileURL.path.dropFirst(rootPath.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            guard !relative.isEmpty else { continue }
+            let isDirectory = values.isDirectory == true
+            let name = Data((isDirectory ? relative + "/" : relative).utf8)
+            let bytes = isDirectory ? Data() : try Data(contentsOf: url, options: [.mappedIfSafe])
+            guard name.count <= Int(UInt16.max), bytes.count <= Int(UInt32.max), archive.count <= Int(UInt32.max) else {
+                throw importError(28, "The assembled world is too large for this archive format.")
+            }
+            var crc: UInt32 = 0xffffffff
+            for byte in bytes {
+                crc ^= UInt32(byte)
+                for _ in 0..<8 { crc = (crc & 1) == 0 ? (crc >> 1) : ((crc >> 1) ^ 0xedb88320) }
+            }
+            crc ^= 0xffffffff
+            let offset = UInt32(archive.count)
+            archive.appendLE(UInt32(0x04034b50)); archive.appendLE(UInt16(20)); archive.appendLE(UInt16(0x0800)); archive.appendLE(UInt16(0)); archive.appendLE(UInt16(0)); archive.appendLE(UInt16(0))
+            archive.appendLE(crc); archive.appendLE(UInt32(bytes.count)); archive.appendLE(UInt32(bytes.count)); archive.appendLE(UInt16(name.count)); archive.appendLE(UInt16(0)); archive.append(name); archive.append(bytes)
+            entries.append(Entry(name: name, bytes: bytes, crc: crc, offset: offset, isDirectory: isDirectory))
+        }
+        guard !entries.isEmpty, entries.count <= Int(UInt16.max) else { throw importError(29, "The assembled world folder is empty or contains too many files.") }
+        let centralOffset = UInt32(archive.count)
+        for entry in entries {
+            archive.appendLE(UInt32(0x02014b50)); archive.appendLE(UInt16(20)); archive.appendLE(UInt16(20)); archive.appendLE(UInt16(0x0800)); archive.appendLE(UInt16(0)); archive.appendLE(UInt16(0)); archive.appendLE(UInt16(0))
+            archive.appendLE(entry.crc); archive.appendLE(UInt32(entry.bytes.count)); archive.appendLE(UInt32(entry.bytes.count)); archive.appendLE(UInt16(entry.name.count)); archive.appendLE(UInt16(0)); archive.appendLE(UInt16(0)); archive.appendLE(UInt16(0)); archive.appendLE(UInt16(0)); archive.appendLE(UInt32(entry.isDirectory ? 0x10 : 0)); archive.appendLE(entry.offset); archive.append(entry.name)
+        }
+        guard archive.count <= Int(UInt32.max) else { throw importError(28, "The assembled world is too large for this archive format.") }
+        let centralSize = UInt32(archive.count) - centralOffset
+        archive.appendLE(UInt32(0x06054b50)); archive.appendLE(UInt16(0)); archive.appendLE(UInt16(0)); archive.appendLE(UInt16(entries.count)); archive.appendLE(UInt16(entries.count)); archive.appendLE(centralSize); archive.appendLE(centralOffset); archive.appendLE(UInt16(0))
+        try archive.write(to: archiveURL, options: .atomic)
+        let check = try Data(contentsOf: archiveURL, options: [.mappedIfSafe])
+        guard check.count >= 22, check.suffix(22).prefix(4) == Data([0x50, 0x4b, 0x05, 0x06]) else {
+            try? fm.removeItem(at: archiveURL)
+            throw importError(30, "The generated .mcworld archive failed validation.")
+        }
+    }
+
+    private static func findWorldFolder(in root: URL) -> URL? {
+        if isWorldFolder(root) { return root }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return nil }
+        var pending = [root]
+        while let folder = pending.popLast() {
+            let children = (try? FileManager.default.contentsOfDirectory(
+                at: folder,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )) ?? []
+            for child in children {
+                var isDirectory: ObjCBool = false
+                if FileManager.default.fileExists(atPath: child.path, isDirectory: &isDirectory),
+                   isDirectory.boolValue {
+                    if isWorldFolder(child) { return child }
+                    pending.append(child)
+                }
+            }
+        }
+        return nil
+    }
+
+    static func isWorldFolder(_ folder: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        let level = folder.appendingPathComponent("level.dat")
+        let db = folder.appendingPathComponent("db", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: level.path),
+              let levelAttributes = try? FileManager.default.attributesOfItem(atPath: level.path),
+              ((levelAttributes[.size] as? NSNumber)?.intValue ?? 0) > 0,
+              FileManager.default.fileExists(atPath: db.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return false }
+        let dbNames = (try? FileManager.default.contentsOfDirectory(atPath: db.path)) ?? []
+        return dbNames.contains(where: {
+            $0 == "CURRENT" || $0.hasPrefix("MANIFEST-") || $0.hasSuffix(".ldb") || $0.hasSuffix(".log")
+        })
+    }
+
+    private static func installWorldFolder(_ worldFolder: URL, preferredName: String? = nil) throws -> URL {
+        guard isWorldFolder(worldFolder) else {
+            throw importError(25, "The selected data is incomplete. SAVEFORGE needs level.dat and the db directory.")
+        }
+        try FileManager.default.createDirectory(at: minecraftRoot, withIntermediateDirectories: true)
+        let name = preferredName ?? worldFolder.lastPathComponent
+        var destination = minecraftRoot.appendingPathComponent(name, isDirectory: true)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            destination = minecraftRoot.appendingPathComponent("\(name)-\(Int(Date().timeIntervalSince1970))", isDirectory: true)
+        }
+        try FileManager.default.copyItem(at: worldFolder, to: destination)
+        MinecraftEditorLoadModel.shared.reset()
+        MinecraftEditSession.shared.clear()
+        UserDefaults.standard.set(name, forKey: worldNameKey)
+        UserDefaults.standard.set(destination.path, forKey: worldPathKey)
+        return destination
+    }
+
+    private static func importError(_ code: Int, _ message: String) -> NSError {
+        NSError(domain: "SAVEFORGE.Minecraft", code: code, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}
+
+private enum MinecraftZipExtractor {
+    static func extract(_ archiveURL: URL, to destination: URL) throws {
+        let data = try Data(contentsOf: archiveURL, options: .mappedIfSafe)
+        guard data.count >= 22 else { throw zipError("This ZIP archive is too small or invalid.") }
+
+        let eocd = findEOCD(in: data)
+        guard let eocd else { throw zipError("Could not find the ZIP directory. The archive may be damaged or use unsupported ZIP64 format.") }
+        let entryCount = Int(read16(data, eocd + 10))
+        let centralOffset = Int(read32(data, eocd + 16))
+        var cursor = centralOffset
+
+        for _ in 0..<entryCount {
+            guard cursor + 46 <= data.count, read32(data, cursor) == 0x02014b50 else {
+                throw zipError("The ZIP central directory is invalid.")
+            }
+            let flags = read16(data, cursor + 8)
+            let method = read16(data, cursor + 10)
+            let compressedSize = Int(read32(data, cursor + 20))
+            let uncompressedSize = Int(read32(data, cursor + 24))
+            let nameLength = Int(read16(data, cursor + 28))
+            let extraLength = Int(read16(data, cursor + 30))
+            let commentLength = Int(read16(data, cursor + 32))
+            let localOffset = Int(read32(data, cursor + 42))
+            guard cursor + 46 + nameLength + extraLength + commentLength <= data.count else {
+                throw zipError("A ZIP entry has an invalid filename or directory record.")
+            }
+            let nameData = data.subdata(in: (cursor + 46)..<(cursor + 46 + nameLength))
+            let name = String(data: nameData, encoding: .utf8) ?? String(data: nameData, encoding: .isoLatin1) ?? ""
+            cursor += 46 + nameLength + extraLength + commentLength
+
+            if name.isEmpty || name.hasPrefix("/") || name.contains("\\") ||
+                name.split(separator: "/").contains("..") {
+                throw zipError("The archive contains an unsafe file path.")
+            }
+            if (flags & 0x1) != 0 { throw zipError("Password-protected ZIP archives aren't supported.") }
+
+            let outputURL = destination.appendingPathComponent(name)
+            if name.hasSuffix("/") {
+                try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+                continue
+            }
+            guard localOffset + 30 <= data.count, read32(data, localOffset) == 0x04034b50 else {
+                throw zipError("A ZIP file entry has an invalid local header.")
+            }
+            let localNameLength = Int(read16(data, localOffset + 26))
+            let localExtraLength = Int(read16(data, localOffset + 28))
+            let payloadStart = localOffset + 30 + localNameLength + localExtraLength
+            guard compressedSize >= 0, payloadStart + compressedSize <= data.count else {
+                throw zipError("A ZIP file entry is truncated.")
+            }
+            let compressed = data.subdata(in: payloadStart..<(payloadStart + compressedSize))
+            let output: Data
+            switch method {
+            case 0:
+                output = compressed
+            case 8:
+                output = try inflate(compressed, expectedSize: uncompressedSize)
+            default:
+                throw zipError("This archive uses an unsupported ZIP compression method (\(method)).")
+            }
+            guard output.count == uncompressedSize else {
+                throw zipError("A ZIP entry did not decompress to its expected size.")
+            }
+            try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try output.write(to: outputURL, options: .atomic)
+        }
+    }
+
+    private static func inflate(_ input: Data, expectedSize: Int) throws -> Data {
+        guard expectedSize >= 0 else { throw zipError("Invalid uncompressed file size.") }
+        if expectedSize == 0 { return Data() }
+        var output = Data(count: expectedSize)
+        let decoded = output.withUnsafeMutableBytes { outBuffer in
+            input.withUnsafeBytes { inBuffer in
+                guard let out = outBuffer.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                      let inputBytes = inBuffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return 0 }
+                return compression_decode_buffer(
+                    out, expectedSize,
+                    inputBytes, input.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+        }
+        guard decoded == expectedSize else {
+            throw zipError("This ZIP's DEFLATE stream couldn't be decoded. Try exporting the world as an uncompressed ZIP or .mcworld file.")
+        }
+        return output
+    }
+
+    private static func findEOCD(in data: Data) -> Int? {
+        let lower = max(0, data.count - 65_557)
+        if data.count < 22 { return nil }
+        for offset in stride(from: data.count - 22, through: lower, by: -1) {
+            if read32(data, offset) == 0x06054b50 { return offset }
+        }
+        return nil
+    }
+
+    private static func read16(_ data: Data, _ offset: Int) -> UInt16 {
+        UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+    }
+
+    private static func read32(_ data: Data, _ offset: Int) -> UInt32 {
+        UInt32(data[offset]) |
+        (UInt32(data[offset + 1]) << 8) |
+        (UInt32(data[offset + 2]) << 16) |
+        (UInt32(data[offset + 3]) << 24)
+    }
+
+    private static func zipError(_ message: String) -> NSError {
+        NSError(domain: "SAVEFORGE.MinecraftZIP", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}
+
+private enum MinecraftWorldImportLauncher {
+    static func presentPicker() {
+        guard let presenter = UIApplication.shared.topMostViewController else { return }
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.item], asCopy: true)
+        let delegate = MinecraftWorldPickerDelegate(presenter: presenter)
+        MinecraftWorldPickerDelegate.activeDelegate = delegate
+        picker.delegate = delegate
+        picker.allowsMultipleSelection = false
+        picker.modalPresentationStyle = .formSheet
+        presenter.present(picker, animated: true)
+    }
+}
+
+private final class MinecraftWorldPickerDelegate: NSObject, UIDocumentPickerDelegate {
+    static var activeDelegate: MinecraftWorldPickerDelegate?
+    private let presenter: UIViewController
+
+    init(presenter: UIViewController) {
+        self.presenter = presenter
+        super.init()
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        Self.activeDelegate = nil
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let selectedURL = urls.first else { Self.activeDelegate = nil; return }
+        let access = selectedURL.startAccessingSecurityScopedResource()
+        defer { if access { selectedURL.stopAccessingSecurityScopedResource() } }
+
+        let ext = selectedURL.pathExtension.lowercased()
+        do {
+            switch ext {
+            case "mcworld", "zip":
+                let imported = try MinecraftWorldImportStore.importArchive(selectedURL)
+                Self.activeDelegate = nil
+                showResult(title: "MINECRAFT WORLD IMPORTED",
+                           message: "\(imported.lastPathComponent) is now the Current World. SAVEFORGE imported the archive and verified level.dat and db.")
+            case "dat":
+                guard selectedURL.lastPathComponent.lowercased() == "level.dat" else {
+                    throw NSError(domain: "SAVEFORGE.Minecraft", code: 30,
+                                  userInfo: [NSLocalizedDescriptionKey: "For a loose-file import, select level.dat."])
+                }
+                let staging = try MinecraftWorldImportStore.beginLevelDatImport(selectedURL)
+                controller.dismiss(animated: true) {
+                    self.presentDatabasePicker(staging: staging)
+                }
+            default:
+                throw NSError(domain: "SAVEFORGE.Minecraft", code: 31,
+                              userInfo: [NSLocalizedDescriptionKey: "Unsupported file. Choose a .mcworld, .zip, or level.dat file."])
+            }
+        } catch {
+            Self.activeDelegate = nil
+            showResult(title: "MINECRAFT IMPORT FAILED", message: error.localizedDescription)
+        }
+    }
+
+    private func presentDatabasePicker(staging: URL) {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.item], asCopy: true)
+        let delegate = MinecraftDatabasePickerDelegate(presenter: presenter, staging: staging)
+        MinecraftDatabasePickerDelegate.activeDelegate = delegate
+        picker.delegate = delegate
+        picker.allowsMultipleSelection = true
+        picker.modalPresentationStyle = .formSheet
+        presenter.present(picker, animated: true)
+    }
+
+    private func showResult(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        presenter.present(alert, animated: true)
+    }
+}
+
+private final class MinecraftDatabasePickerDelegate: NSObject, UIDocumentPickerDelegate {
+    static var activeDelegate: MinecraftDatabasePickerDelegate?
+    private let presenter: UIViewController
+    private let staging: URL
+
+    init(presenter: UIViewController, staging: URL) {
+        self.presenter = presenter
+        self.staging = staging
+        super.init()
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        try? FileManager.default.removeItem(at: staging)
+        Self.activeDelegate = nil
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        do {
+            let imported = try MinecraftWorldImportStore.finishLevelDatImport(staging: staging, dbFiles: urls)
+            Self.activeDelegate = nil
+            let alert = UIAlertController(
+                title: "MINECRAFT WORLD IMPORTED",
+                message: "\(imported.lastPathComponent) is now the Current World. SAVEFORGE assembled level.dat and the selected database files, created a complete .mcworld backup, and saved it in Imported Files.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            presenter.present(alert, animated: true)
+        } catch {
+            Self.activeDelegate = nil
+            let alert = UIAlertController(title: "MINECRAFT IMPORT FAILED", message: error.localizedDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            presenter.present(alert, animated: true)
+        }
+    }
+}
 
 // MARK: - Stardew-only save file importer
+// MARK: - Stardew save import
 private enum StardewFileImportLauncher {
     static func presentPicker() {
         guard let presenter = UIApplication.shared.topMostViewController else { return }
@@ -2004,13 +4271,23 @@ private final class StardewFilePickerDelegate: NSObject, UIDocumentPickerDelegat
             let data = try Data(contentsOf: url)
             let summary = try StardewSaveParser.parse(data: data, filename: url.lastPathComponent)
             let stored = try StardewSaveStore.shared.importSaveFile(url)
-            let alert = UIAlertController(
-                title: "STARDEW VALLEY SAVE IMPORTED",
-                message: summary.importSummary + "\n\nWorking copy: \(stored.lastPathComponent)\n\nOpen a Stardew editor section to edit this farm.",
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            presenter.present(alert, animated: true)
+            StardewEditorViewController.activateWorkingCopy(url: stored, data: data)
+
+            controller.dismiss(animated: true) {
+                let editor = StardewEditorViewController(initialSection: "Dashboard")
+                editor.title = "STARDEW VALLEY"
+                if let navigationController = presenter.navigationController {
+                    navigationController.pushViewController(editor, animated: true)
+                } else {
+                    let alert = UIAlertController(
+                        title: "SAVE IMPORTED",
+                        message: summary.importSummary + "\n\nThe farm is ready, but SAVEFORGE could not find the current navigation stack to open the editor.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    presenter.present(alert, animated: true)
+                }
+            }
         } catch {
             let alert = UIAlertController(
                 title: "STARDEW IMPORT FAILED",
@@ -2025,6 +4302,7 @@ private final class StardewFilePickerDelegate: NSObject, UIDocumentPickerDelegat
 
 // MARK: - Load a previously imported Fallout Shelter save from app storage
 
+// MARK: - Fallout Shelter save loading
 private enum StoredVaultSaveLoader {
     static func presentPicker() {
         let files = AppFileStore.files(in: AppFileStore.importedDirectory)
@@ -2087,7 +4365,10 @@ private enum StoredVaultSaveLoader {
 
 // MARK: - Import screen / UIKit document picker
 
+// MARK: - Save import screen
 private struct SaveImportScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View {
         ImportPickerControllerHost()
             .background(SF.background.ignoresSafeArea())
@@ -2160,6 +4441,15 @@ private final class ImportPickerViewController: UIViewController, UIDocumentPick
         }
 
         do {
+            if url.pathExtension.lowercased() == "mcworld" {
+                let importedWorld = try MinecraftWorldImportStore.importArchive(url)
+                showResult(
+                    title: "MINECRAFT WORLD IMPORTED",
+                    message: "\(importedWorld.lastPathComponent) is now the Current World. SAVEFORGE verified level.dat and the db folder."
+                )
+                return
+            }
+
             let data = try Data(contentsOf: url)
             let detected = try SaveEngineDetector.detect(
                 data: data,
@@ -2254,16 +4544,13 @@ private enum DetectedSaveEngine {
     case unknown
 }
 
+// MARK: - Save engine detection
 private enum SaveEngineDetector {
     static func detect(data: Data, filename: String) throws -> DetectedSaveEngine {
-        // Fallout Shelter saves are Base64-wrapped AES data. A successful decrypt plus
-        // vault/dwellers structure validation is the authoritative engine match.
         if let vault = try? FSSEStore.shared.decrypt(data) {
             return .falloutShelter(vault)
         }
 
-        // Do not route a failed Fallout decrypt into another editor. These signatures
-        // are conservative format hints only; their game engines must exist before editing.
         let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
         let lowerName = filename.lowercased()
         let xmlPrefix = String(decoding: data.prefix(4096), as: UTF8.self)
@@ -2294,13 +4581,15 @@ private enum SaveEngineDetector {
 
 // MARK: - Recent / favorites / settings
 
+// MARK: - Recent and favorites
 private struct RecentScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View {
         NavigationStack {
             ZStack {
                 SF.background.ignoresSafeArea()
                 ScrollView {
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
                     VStack(alignment: .leading, spacing: 14) {
                         SectionLabel(title: "RECENTLY OPENED", detail: "NEWEST FIRST")
                         let games = GameInfo.all.filter { AppLibraryStore.shared.recentIDs.contains($0.id) }.sorted { a, b in
@@ -2310,11 +4599,10 @@ private struct RecentScreen: View {
                             EmptyLibraryState(title: "NO RECENT GAMES", detail: "Games you open will appear here.", symbol: "clock")
                         } else {
                             ForEach(games) { game in
-                                NavigationLink { GameDestination(game: game) } label: { GameCard(game: game) }.buttonStyle(.plain)
+                                GameCardTile(game: game)
                             }
                         }
                     }.padding(16)
-                    }
                 }
             }.navigationTitle("Recent").toolbarColorScheme(.dark, for: .navigationBar)
         }
@@ -2322,12 +4610,13 @@ private struct RecentScreen: View {
 }
 
 private struct FavoritesScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View {
         NavigationStack {
             ZStack {
                 SF.background.ignoresSafeArea()
                 ScrollView {
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
                     VStack(alignment: .leading, spacing: 14) {
                         SectionLabel(title: "YOUR FAVORITES", detail: "PINNED GAMES")
                         let games = GameInfo.all.filter { AppLibraryStore.shared.favoriteIDs.contains($0.id) }
@@ -2335,11 +4624,10 @@ private struct FavoritesScreen: View {
                             EmptyLibraryState(title: "NO FAVORITES YET", detail: "Open a game and tap the star to pin it here.", symbol: "star")
                         } else {
                             ForEach(games) { game in
-                                NavigationLink { GameDestination(game: game) } label: { GameCard(game: game) }.buttonStyle(.plain)
+                                GameCardTile(game: game)
                             }
                         }
                     }.padding(16)
-                    }
                 }
             }.navigationTitle("Favorites").toolbarColorScheme(.dark, for: .navigationBar)
         }
@@ -2347,6 +4635,8 @@ private struct FavoritesScreen: View {
 }
 
 private struct EmptyLibraryState: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let title: String; let detail: String; let symbol: String
     var body: some View {
         VStack(spacing: 10) {
@@ -2357,7 +4647,10 @@ private struct EmptyLibraryState: View {
     }
 }
 
+// MARK: - Settings
 private struct SettingsScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -2398,7 +4691,21 @@ private struct SettingsScreen: View {
                         }.buttonStyle(.plain)
                         SettingLine(icon: "arrow.counterclockwise", title: "Backup policy", detail: "Original files remain unchanged")
                         SettingLine(icon: "checkmark.shield", title: "Save validation", detail: "Game-specific checks enabled where supported")
-                        SectionLabel(title: "APPLICATION", detail: "V0.1.3")
+                        SectionLabel(title: "APPLICATION", detail: "V1.0.5")
+                        NavigationLink { ThemeSettingsScreen() } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "paintpalette.fill").foregroundStyle(SF.accent).frame(width: 25)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Appearance & Theme").font(.system(size: 12, weight: .semibold)).foregroundStyle(SF.text)
+                                    Text("Choose the SAVEFORGE color theme").font(.system(size: 10)).foregroundStyle(SF.muted)
+                                }
+                                Spacer()
+                                Text(SFThemeManager.shared.selectedTheme.rawValue.uppercased())
+                                    .font(.system(size: 8, weight: .black, design: .monospaced))
+                                    .foregroundStyle(SF.gold)
+                                Image(systemName: "chevron.right").foregroundStyle(SF.gold)
+                            }.padding(13).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 12))
+                        }.buttonStyle(.plain)
                         NavigationLink { SaveforgeCreditsScreen() } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "info.circle.fill").foregroundStyle(SF.gold).frame(width: 25)
@@ -2409,7 +4716,7 @@ private struct SettingsScreen: View {
                                 Spacer(); Image(systemName: "chevron.right").foregroundStyle(SF.gold)
                             }.padding(13).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 12))
                         }.buttonStyle(.plain)
-                        SettingLine(icon: "app", title: "Version", detail: "0.1.3")
+                        SettingLine(icon: "app", title: "Version", detail: "1.0.5")
                         SettingLine(icon: "iphone", title: "Platform", detail: "iOS and iPadOS")
                         SettingLine(icon: "wifi.slash", title: "Connectivity", detail: "Designed for offline use")
                     }.padding(18)
@@ -2419,7 +4726,86 @@ private struct SettingsScreen: View {
     }
 }
 
+// MARK: - Theme settings
+private struct ThemeSettingsScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
+    var body: some View {
+        ZStack {
+            SF.background.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionLabel(title: "APPEARANCE", detail: "APPLICATION THEME")
+                    VStack(alignment: .leading, spacing: 11) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "paintpalette.fill").foregroundStyle(SF.accent)
+                            Text("App Theme").font(.system(size: 13, weight: .bold)).foregroundStyle(SF.text)
+                            Spacer()
+                            Text(themeManager.selectedTheme.rawValue.uppercased())
+                                .font(.system(size: 9, weight: .black, design: .monospaced))
+                                .foregroundStyle(SF.gold)
+                        }
+                        Text("Choose a color theme for SAVEFORGE. Your selection is saved automatically.")
+                            .font(.system(size: 10)).foregroundStyle(SF.muted)
+                        ForEach(SFTheme.allCases) { theme in
+                            Button {
+                                themeManager.selectedTheme = theme
+                            } label: {
+                                HStack(spacing: 11) {
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .fill(theme.background)
+                                        .frame(width: 38, height: 32)
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 5)
+                                                .stroke(theme.accent.opacity(0.75), lineWidth: 1)
+                                        }
+                                        .overlay(alignment: .leading) {
+                                            Capsule().fill(theme.accent).frame(width: 5, height: 19).padding(.leading, 5)
+                                        }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(theme.rawValue)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(SF.text)
+                                        Text(theme.description)
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(SF.muted)
+                                    }
+                                    Spacer()
+                                    if themeManager.selectedTheme == theme {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(theme.accent)
+                                    }
+                                }
+                                .padding(10)
+                                .background(themeManager.selectedTheme == theme ? theme.accent.opacity(0.10) : SF.background.opacity(0.55))
+                                .clipShape(RoundedRectangle(cornerRadius: 9))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 9)
+                                        .stroke(themeManager.selectedTheme == theme ? theme.accent.opacity(0.55) : SF.border.opacity(0.5), lineWidth: 1)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(13)
+                    .background(SF.panel)
+                    .clipShape(RoundedRectangle(cornerRadius: 13))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 13).stroke(SF.border, lineWidth: 1)
+                    }
+                }
+                .padding(18)
+            }
+        }
+        .navigationTitle("Appearance")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+    }
+}
+
 private struct SaveforgeCreditsScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View {
         ZStack {
             SF.background.ignoresSafeArea()
@@ -2482,57 +4868,123 @@ private struct SaveforgeCreditsScreen: View {
 }
 
 private struct ImportedFilesScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View { LocalFilesList(title: "Imported Files", directory: AppFileStore.importedDirectory) }
 }
 private struct StorageViewerScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View { LocalFilesList(title: "Internal Storage", directory: AppFileStore.documentsDirectory) }
 }
 
 private struct StorageCleanupScreen: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     var body: some View {
         ZStack {
             SF.background.ignoresSafeArea()
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("STORAGE CLEANUP").font(.system(size: 23, weight: .black, design: .rounded)).foregroundStyle(SF.text)
-                    Text("Choose what to remove. Each action asks for confirmation before deleting anything.")
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("INTERNAL STORAGE")
+                        .font(.system(size: 23, weight: .black, design: .rounded))
+                        .foregroundStyle(SF.text)
+                    Text("Remove files and data stored by SAVEFORGE. Files outside the app are never touched.")
                         .font(.system(size: 11)).foregroundStyle(SF.secondary)
-                    cleanupButton(title: "Clear Stardew Game Data", detail: "Removes downloaded Stardew JSON catalogs and the active Stardew working copy. Imported backup files are preserved.", symbol: "leaf.circle", destructive: true) {
-                        StorageCleanup.removeStardewData()
+
+                    cleanupButton(
+                        title: "Remove JSON Files",
+                        detail: "Deletes downloaded game-data catalogs for Minecraft, Fallout Shelter, and Stardew Valley. You can download them again.",
+                        symbol: "curlybraces",
+                        tint: SF.accent,
+                        background: SF.panel
+                    ) {
+                        StorageCleanup.confirm(
+                            title: "Remove JSON Files?",
+                            message: "Downloaded game-data catalogs will be deleted. Bundled app resources and imported saves will remain untouched."
+                        ) { StorageCleanup.removeJSONFiles() }
                     }
-                    cleanupButton(title: "Clear Fallout Shelter Dependencies", detail: "Removes downloaded Fallout Shelter dependency files. You can download them again.", symbol: "doc.zipper", destructive: true) {
-                        StorageCleanup.removeDownloadedCatalogs()
+
+                    cleanupButton(
+                        title: "Remove All Backups & Imports",
+                        detail: "Deletes imported save copies, backups, and SAVEFORGE-created saved or temporary exports.",
+                        symbol: "folder.badge.minus",
+                        tint: SF.gold,
+                        background: SF.panel
+                    ) {
+                        StorageCleanup.confirm(
+                            title: "Remove All Backups & Imports?",
+                            message: "All copies stored inside SAVEFORGE's Imported Files and Exports locations, plus SAVEFORGE temporary exports, will be deleted. Original files outside the app are not affected."
+                        ) { StorageCleanup.removeImportsBackupsAndExports() }
                     }
-                    cleanupButton(title: "Clear Temporary Exports", detail: "Removes temporary files created during export. Imported backups are preserved.", symbol: "arrow.up.doc", destructive: true) {
-                        StorageCleanup.removeTemporaryExports()
+
+                    cleanupButton(
+                        title: "RESET ALL STORAGE",
+                        detail: "Clears all SAVEFORGE-managed imports, backups, exports, downloaded JSON catalogs, temporary files, and cache data.",
+                        symbol: "trash.fill",
+                        tint: SF.red,
+                        background: Color(red: 0.20, green: 0.045, blue: 0.05),
+                        borderColor: SF.red
+                    ) {
+                        StorageCleanup.confirm(
+                            title: "Reset All SAVEFORGE Storage?",
+                            message: "This permanently removes all imported copies, backups, saved and temporary exports, downloaded catalogs, and SAVEFORGE cache data. It does not delete original files outside SAVEFORGE, bundled app assets, or your app settings."
+                        ) { StorageCleanup.resetAllStorage() }
                     }
-                    cleanupButton(title: "Clear Imported Backups", detail: "Permanently removes copies in Settings → Imported Files. Your original files outside SAVEFORGE are untouched.", symbol: "folder.badge.minus", destructive: true) {
-                        StorageCleanup.removeImportedBackups()
-                    }
-                    Text("The currently loaded save in memory is not changed by these storage actions.")
-                        .font(.system(size: 10, weight: .medium)).foregroundStyle(SF.muted).padding(.top, 5)
+
+                    Text("SAVEFORGE only deletes files inside its own managed storage locations. Original files in Files, iCloud Drive, or other apps are never deleted.")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(SF.muted)
+                        .padding(.top, 4)
                 }.padding(18)
             }
-        }.navigationTitle("Clear Storage").toolbarColorScheme(.dark, for: .navigationBar)
+        }
+        .navigationTitle("Internal Storage")
+        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 
-    private func cleanupButton(title: String, detail: String, symbol: String, destructive: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            StorageCleanup.confirm(title: title, message: detail, action: action)
-        } label: {
+    private func cleanupButton(
+        title: String,
+        detail: String,
+        symbol: String,
+        tint: Color,
+        background: Color,
+        borderColor: Color? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: symbol).foregroundStyle(SF.gold).frame(width: 25)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.system(size: 12, weight: .bold)).foregroundStyle(SF.text)
-                    Text(detail).font(.system(size: 10)).foregroundStyle(SF.muted).multilineTextAlignment(.leading)
+                Image(systemName: symbol)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(tint)
+                    Text(detail)
+                        .font(.system(size: 10))
+                        .foregroundStyle(SF.muted)
+                        .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right").foregroundStyle(SF.gold)
-            }.padding(14).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 12))
-        }.buttonStyle(.plain)
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(tint)
+            }
+            .padding(15)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(background)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(borderColor ?? Color.clear, lineWidth: borderColor == nil ? 0 : 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
     }
 }
 
+// MARK: - Storage cleanup
 private enum StorageCleanup {
     static func confirm(title: String, message: String, action: @escaping () -> Void) {
         guard let presenter = UIApplication.shared.connectedScenes
@@ -2569,71 +5021,82 @@ private enum StorageCleanup {
         return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
     }
 
-    static func removeStardewData() {
-        // Stardew JSON catalogs are stored inside Documents/SAVEFORGE.
-        // Remove only the Stardew catalog subfolder; preserve other SAVEFORGE data
-        // and Imported Files.
-        let catalogFolder = AppFileStore.documentsDirectory
-            .appendingPathComponent("SAVEFORGE", isDirectory: true)
-            .appendingPathComponent("StardewCatalog", isDirectory: true)
-        try? FileManager.default.removeItem(at: catalogFolder)
-
-        // Clear the editor's in-memory working copy so it cannot silently
-        // repopulate the editor after the on-disk Stardew data is removed.
-        StardewEditorViewController.clearWorkingCopy()
-
-        // Remove only SAVEFORGE-created temporary Stardew exports.
-        let temp = FileManager.default.temporaryDirectory
-        let files = (try? FileManager.default.contentsOfDirectory(at: temp, includingPropertiesForKeys: nil)) ?? []
-        for file in files where file.lastPathComponent.hasPrefix("SAVEFORGE-Stardew-") {
-            try? FileManager.default.removeItem(at: file)
-        }
+    private static var saveforgeDirectory: URL {
+        AppFileStore.documentsDirectory.appendingPathComponent("SAVEFORGE", isDirectory: true)
     }
 
-    static func removeDownloadedCatalogs() {
-        let folder = AppFileStore.documentsDirectory.appendingPathComponent("SAVEFORGE/VaultDependencies", isDirectory: true)
-        try? FileManager.default.removeItem(at: folder)
-    }
-    static func removeTemporaryExports() {
+    private static func removeContents(of folder: URL) {
         let fm = FileManager.default
-
-        // Remove every SAVEFORGE-generated temporary export, including Fallout
-        // Shelter and Stardew files, regardless of their game-specific suffix.
-        let tempFolder = fm.temporaryDirectory
-        let tempFiles = (try? fm.contentsOfDirectory(
-            at: tempFolder,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
-
-        for file in tempFiles where file.lastPathComponent.hasPrefix("SAVEFORGE-") {
-            do { try fm.removeItem(at: file) }
-            catch { showError("Could Not Delete Export", message: "\(file.lastPathComponent): \(error.localizedDescription)") }
+        guard fm.fileExists(atPath: folder.path) else { return }
+        for item in AppFileStore.files(in: folder) {
+            do { try fm.removeItem(at: item) }
+            catch { showError("Could Not Delete Item", message: "\(item.lastPathComponent): \(error.localizedDescription)") }
         }
+    }
 
-        // Also clear an app-managed Exports folder if one exists in SAVEFORGE storage.
-        let storedExports = AppFileStore.documentsDirectory
-            .appendingPathComponent("SAVEFORGE", isDirectory: true)
-            .appendingPathComponent("Exports", isDirectory: true)
-        if fm.fileExists(atPath: storedExports.path) {
-            for file in AppFileStore.files(in: storedExports) {
-                do { try fm.removeItem(at: file) }
-                catch { showError("Could Not Delete Export", message: "\(file.lastPathComponent): \(error.localizedDescription)") }
+    private static func removeSAVEFORGETemporaryFiles() {
+        let fm = FileManager.default
+        let temp = fm.temporaryDirectory
+        let items = (try? fm.contentsOfDirectory(at: temp, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        for item in items where item.lastPathComponent.hasPrefix("SAVEFORGE-") {
+            do { try fm.removeItem(at: item) }
+            catch { showError("Could Not Delete Temporary File", message: "\(item.lastPathComponent): \(error.localizedDescription)") }
+        }
+    }
+
+    static func removeJSONFiles() {
+        let folders = [
+            saveforgeDirectory.appendingPathComponent("StardewCatalog", isDirectory: true),
+            saveforgeDirectory.appendingPathComponent("MinecraftBedrockCatalog", isDirectory: true),
+            saveforgeDirectory.appendingPathComponent("VaultDependencies", isDirectory: true)
+        ]
+        for folder in folders {
+            do {
+                if FileManager.default.fileExists(atPath: folder.path) {
+                    try FileManager.default.removeItem(at: folder)
+                }
+            } catch {
+                showError("Could Not Remove JSON Files", message: "\(folder.lastPathComponent): \(error.localizedDescription)")
             }
         }
     }
 
-    static func removeImportedBackups() {
-        let fm = FileManager.default
-        let folder = AppFileStore.importedDirectory
-
-        // Remove every imported file and folder, including nested Stardew farm
-        // folders, while keeping the Imported Files directory itself available.
-        for file in AppFileStore.files(in: folder) {
-            do { try fm.removeItem(at: file) }
-            catch { showError("Could Not Delete Import", message: "\(file.lastPathComponent): \(error.localizedDescription)") }
-        }
+    static func removeImportsBackupsAndExports() {
+        removeContents(of: AppFileStore.importedDirectory)
+        removeContents(of: saveforgeDirectory.appendingPathComponent("Exports", isDirectory: true))
+        removeSAVEFORGETemporaryFiles()
     }
+
+    static func resetAllStorage() {
+        let fm = FileManager.default
+        do {
+            if fm.fileExists(atPath: saveforgeDirectory.path) {
+                try fm.removeItem(at: saveforgeDirectory)
+            }
+        } catch {
+            showError("Could Not Reset SAVEFORGE Files", message: error.localizedDescription)
+        }
+        removeContents(of: AppFileStore.importedDirectory)
+        removeSAVEFORGETemporaryFiles()
+
+        let cacheRoot = fm.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("SAVEFORGE", isDirectory: true)
+        let supportRoot = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("SAVEFORGE", isDirectory: true)
+
+        for folder in [cacheRoot, supportRoot].compactMap({ $0 }) {
+            do {
+                if fm.fileExists(atPath: folder.path) {
+                    try fm.removeItem(at: folder)
+                }
+            } catch {
+                showError("Could Not Reset Cache Data", message: "\(folder.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+
+        StardewEditorViewController.clearWorkingCopy()
+    }
+
 }
 
 private extension UIViewController {
@@ -2643,6 +5106,8 @@ private extension UIViewController {
 }
 
 private struct LocalFilesList: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let title: String
     let directory: URL
 
@@ -2742,6 +5207,7 @@ private struct LocalFilesList: View {
 
 // MARK: - Stardew Valley save import engine (iOS + PC XML saves)
 
+// MARK: - Stardew save engine
 private enum StardewSaveError: LocalizedError {
     case invalidXML(String)
     case invalidSaveFolder(String)
@@ -2789,7 +5255,6 @@ private final class StardewXMLReader: NSObject, XMLParserDelegate {
         if !value.isEmpty {
             let path = elementStack.joined(separator: ".")
             values[path] = value
-            // Also keep the last occurrence of a leaf key as a conservative fallback.
             values["$" + elementName] = value
         }
         if !elementStack.isEmpty { elementStack.removeLast() }
@@ -2797,6 +5262,7 @@ private final class StardewXMLReader: NSObject, XMLParserDelegate {
     }
 }
 
+// MARK: - Stardew save parser
 private enum StardewSaveParser {
     static func parse(data: Data, filename: String) throws -> StardewSaveSummary {
         guard !data.isEmpty else { throw StardewSaveError.invalidXML("The selected file is empty.") }
@@ -2824,6 +5290,7 @@ private enum StardewSaveParser {
     }
 }
 
+// MARK: - Stardew save store
 private final class StardewSaveStore {
     static let shared = StardewSaveStore()
     private init() {}
@@ -2838,8 +5305,6 @@ private final class StardewSaveStore {
         while let item = enumerator.nextObject() as? URL {
             let values = try? item.resourceValues(forKeys: Set(keys))
             guard values?.isRegularFile == true else { continue }
-            // Stardew's primary save file has no extension and shares its name with
-            // the containing FarmName_<uniqueID> directory.
             if item.pathExtension.isEmpty && item.lastPathComponent == folder.lastPathComponent {
                 files.insert(item, at: 0)
             } else if item.lastPathComponent == "SaveGameInfo" {
@@ -2847,8 +5312,6 @@ private final class StardewSaveStore {
             }
         }
         if files.isEmpty {
-            // Some Files providers wrap the selected directory in an extra folder.
-            // Look for a unique extensionless XML save whose root is SaveGame.
             let allFiles = (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles])) ?? []
             for file in allFiles where file.pathExtension.isEmpty && file.lastPathComponent != "SaveGameInfo" {
                 if let data = try? Data(contentsOf: file), (try? StardewSaveParser.parse(data: data, filename: file.lastPathComponent)) != nil {
@@ -2884,10 +5347,16 @@ private final class StardewSaveStore {
     }
 }
 
+// MARK: - App file storage
 private enum AppFileStore {
     static var documentsDirectory: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
     static var importedDirectory: URL {
         let url = documentsDirectory.appendingPathComponent("Imported Files", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+    static var exportsDirectory: URL {
+        let url = documentsDirectory.appendingPathComponent("SAVEFORGE/Exports", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
@@ -2922,6 +5391,8 @@ private final class AppLibraryStore {
 }
 
 private struct SettingLine: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let icon: String
     let title: String
     let detail: String
@@ -2948,6 +5419,8 @@ private struct SettingLine: View {
 }
 
 private struct SectionLabel: View {
+    @ObservedObject private var themeManager = SFThemeManager.shared
+
     let title: String
     let detail: String
 
@@ -2967,6 +5440,7 @@ private struct SectionLabel: View {
 
 // MARK: - Game data
 
+// MARK: - Game information
 private struct GameInfo: Identifiable {
     let id: String
     let title: String
@@ -2978,13 +5452,12 @@ private struct GameInfo: Identifiable {
     let border: Color
     let modules: [EditorModule]
 
-    // Each game owns its own library-card status and status color.
     var statusTitle: String {
         switch id {
         case "fallout": return "EDITOR READY"
-        case "stardew": return "EDITOR READY"
+        case "stardew": return "EDITOR READY (Beta)"
         case "terraria": return "COMING SOON"
-        case "minecraft": return "COMING SOON"
+        case "minecraft": return "CRAFTER READY"
         case "theotown": return "COMING SOON"
         case "worldbox": return "COMING SOON"
         default: return "COMING SOON"
@@ -2993,12 +5466,12 @@ private struct GameInfo: Identifiable {
 
     var statusColor: Color {
         switch id {
-        case "fallout": return SF.steelBlue
-        case "stardew": return SF.steelBlue
-        case "terraria": return SF.bronze
-        case "minecraft": return SF.bronze
-        case "theotown": return SF.bronze
-        case "worldbox": return SF.bronze
+        case "fallout": return SF.emerald
+        case "stardew": return SF.copper
+        case "terraria": return SF.red
+        case "minecraft": return SF.emerald
+        case "theotown": return SF.red
+        case "worldbox": return SF.red
         default: return SF.secondary
         }
     }
@@ -3041,21 +5514,23 @@ private struct GameInfo: Identifiable {
         }
     }
 
-    static let all: [GameInfo] = [
+    static var all: [GameInfo] { [
         GameInfo(
             id: "fallout", title: "Fallout Shelter",
             subtitle: "Vault management and save editing",
             symbol: "building.2.crop.circle",
-            accent: Color(red: 0.36, green: 0.91, blue: 0.48),
-            background: Color(red: 0.025, green: 0.045, blue: 0.035),
-            panel: Color(red: 0.055, green: 0.085, blue: 0.065),
-            border: Color(red: 0.16, green: 0.29, blue: 0.19),
+            accent: SF.accent,
+            background: SF.background,
+            panel: SF.panel,
+            border: SF.border,
             modules: [
                 EditorModule(title: "Vault Overview", detail: "Vault number and general data", symbol: "building.2"),
                 EditorModule(title: "Resources", detail: "Caps, power, food, water and more", symbol: "bolt.fill"),
                 EditorModule(title: "Dwellers", detail: "Stats, SPECIAL and assignments", symbol: "person.2"),
                 EditorModule(title: "Inventory", detail: "Weapons, outfits, pets and items", symbol: "backpack"),
                 EditorModule(title: "Rooms", detail: "Room data and vault layout", symbol: "square.grid.3x3"),
+                EditorModule(title: "Season Vault", detail: "Detect seasonal vaults and edit Poker Chips", symbol: "ticket"),
+                EditorModule(title: "Season Pass", detail: "Import and inspect spd.dat season progress", symbol: "medal"),
                 EditorModule(title: "Export Save", detail: "Create and save an edited Vault.sav copy", symbol: "square.and.arrow.up")
             ]
         ),
@@ -3063,10 +5538,10 @@ private struct GameInfo: Identifiable {
             id: "stardew", title: "Stardew Valley",
             subtitle: "Farm, inventory, skills and relationships",
             symbol: "leaf",
-            accent: Color(red: 0.88, green: 0.67, blue: 0.35),
-            background: Color(red: 0.12, green: 0.085, blue: 0.055),
-            panel: Color(red: 0.19, green: 0.135, blue: 0.085),
-            border: Color(red: 0.34, green: 0.24, blue: 0.15),
+            accent: SF.accent,
+            background: SF.background,
+            panel: SF.panel,
+            border: SF.border,
             modules: [
                 EditorModule(title: "Farmer", detail: "Name, health and stamina", symbol: "person.crop.circle"),
                 EditorModule(title: "Resources", detail: "Money and farm resources", symbol: "leaf"),
@@ -3074,7 +5549,6 @@ private struct GameInfo: Identifiable {
                 EditorModule(title: "Skills", detail: "Skill levels and experience", symbol: "chart.bar"),
                 EditorModule(title: "Relationships", detail: "Friendship and social data", symbol: "heart"),
                 EditorModule(title: "Farm", detail: "Farm identity and world data", symbol: "house"),
-                EditorModule(title: "Animals", detail: "Farm animals and pets", symbol: "pawprint"),
                 EditorModule(title: "Equipment", detail: "Tools and equipped items", symbol: "hammer"),
                 EditorModule(title: "Progress", detail: "Calendar and progression", symbol: "trophy")
             ]
@@ -3083,10 +5557,10 @@ private struct GameInfo: Identifiable {
             id: "terraria", title: "Terraria",
             subtitle: "Character, inventory and world data",
             symbol: "tree",
-            accent: Color(red: 0.43, green: 0.77, blue: 0.91),
-            background: Color(red: 0.035, green: 0.055, blue: 0.09),
-            panel: Color(red: 0.075, green: 0.105, blue: 0.16),
-            border: Color(red: 0.16, green: 0.24, blue: 0.36),
+            accent: SF.accent,
+            background: SF.background,
+            panel: SF.panel,
+            border: SF.border,
             modules: [
                 EditorModule(title: "Character", detail: "Player stats and progression", symbol: "person"),
                 EditorModule(title: "Inventory", detail: "Items, stacks and equipment", symbol: "backpack"),
@@ -3098,10 +5572,10 @@ private struct GameInfo: Identifiable {
             id: "minecraft", title: "Minecraft Bedrock",
             subtitle: "World, player and inventory data",
             symbol: "cube.transparent",
-            accent: Color(red: 0.48, green: 0.78, blue: 0.43),
-            background: Color(red: 0.055, green: 0.075, blue: 0.055),
-            panel: Color(red: 0.105, green: 0.14, blue: 0.095),
-            border: Color(red: 0.21, green: 0.30, blue: 0.18),
+            accent: SF.accent,
+            background: SF.background,
+            panel: SF.panel,
+            border: SF.border,
             modules: [
                 EditorModule(title: "World", detail: "World settings and information", symbol: "globe"),
                 EditorModule(title: "Player", detail: "Player data and game mode", symbol: "person"),
@@ -3113,10 +5587,10 @@ private struct GameInfo: Identifiable {
             id: "theotown", title: "TheoTown",
             subtitle: "City management and simulation data",
             symbol: "building.2",
-            accent: Color(red: 0.39, green: 0.72, blue: 0.89),
-            background: Color(red: 0.035, green: 0.065, blue: 0.085),
-            panel: Color(red: 0.07, green: 0.12, blue: 0.15),
-            border: Color(red: 0.15, green: 0.27, blue: 0.33),
+            accent: SF.accent,
+            background: SF.background,
+            panel: SF.panel,
+            border: SF.border,
             modules: [
                 EditorModule(title: "City", detail: "City identity and information", symbol: "building.2"),
                 EditorModule(title: "Economy", detail: "Funds and city resources", symbol: "banknote"),
@@ -3128,10 +5602,10 @@ private struct GameInfo: Identifiable {
             id: "worldbox", title: "WorldBox",
             subtitle: "World creator and sandbox data",
             symbol: "globe.americas",
-            accent: Color(red: 0.79, green: 0.69, blue: 0.40),
-            background: Color(red: 0.075, green: 0.065, blue: 0.045),
-            panel: Color(red: 0.13, green: 0.115, blue: 0.075),
-            border: Color(red: 0.29, green: 0.25, blue: 0.15),
+            accent: SF.accent,
+            background: SF.background,
+            panel: SF.panel,
+            border: SF.border,
             modules: [
                 EditorModule(title: "World", detail: "World information and settings", symbol: "globe"),
                 EditorModule(title: "Civilizations", detail: "Kingdom and settlement data", symbol: "crown"),
@@ -3139,7 +5613,7 @@ private struct GameInfo: Identifiable {
                 EditorModule(title: "History", detail: "World events and progression", symbol: "clock")
             ]
         )
-    ]
+    ] }
 }
 
 private struct EditorModule {
@@ -3150,38 +5624,65 @@ private struct EditorModule {
 
 // MARK: - Colors
 
+// MARK: - Shared theme colors
 private enum SF {
-    static let background = Color(red: 0.012, green: 0.020, blue: 0.026)
-    static let panel = Color(red: 0.035, green: 0.060, blue: 0.071)
-    static let artwork = Color(red: 0.018, green: 0.040, blue: 0.052)
-    static let accent = Color(red: 0.12, green: 0.88, blue: 0.98)
-    static let gold = Color(red: 1.00, green: 0.70, blue: 0.22)
+    static var background: Color { SFThemeManager.shared.selectedTheme.background }
+    static var panel: Color { SFThemeManager.shared.selectedTheme.panel }
+    static var artwork: Color { SFThemeManager.shared.selectedTheme.artwork }
+    static var accent: Color { SFThemeManager.shared.selectedTheme.accent }
+    static var gold: Color { SFThemeManager.shared.selectedTheme.gold }
     static let text = Color(red: 0.95, green: 0.97, blue: 0.99)
-    static let secondary = Color(red: 0.66, green: 0.73, blue: 0.78)
-    static let muted = Color(red: 0.39, green: 0.49, blue: 0.55)
-    static let border = Color(red: 0.12, green: 0.25, blue: 0.30)
+    static var secondary: Color { SFThemeManager.shared.selectedTheme.accent.opacity(0.78) }
+    static var muted: Color { SFThemeManager.shared.selectedTheme.accent.opacity(0.52) }
+    static var border: Color { SFThemeManager.shared.selectedTheme.border }
 
-    // Expanded Cyber Forge palette for independent card accents and UI states.
-    static let bronze = Color(red: 0.78, green: 0.43, blue: 0.24)
-    static let copper = Color(red: 0.82, green: 0.49, blue: 0.31)
-    static let steel = Color(red: 0.62, green: 0.69, blue: 0.75)
-    static let steelBlue = Color(red: 0.43, green: 0.66, blue: 0.82)
-    static let slate = Color(red: 0.39, green: 0.49, blue: 0.60)
-    static let emerald = Color(red: 0.30, green: 0.72, blue: 0.52)
-    static let farmGold = Color(red: 0.88, green: 0.68, blue: 0.38)
-    static let violet = Color(red: 0.64, green: 0.53, blue: 0.86)
+    static var bronze: Color { SFThemeManager.shared.selectedTheme.gold.opacity(0.82) }
+    static var copper: Color { SFThemeManager.shared.selectedTheme.gold.opacity(0.68) }
+    static var steel: Color { SFThemeManager.shared.selectedTheme.accent.opacity(0.72) }
+    static var steelBlue: Color { SFThemeManager.shared.selectedTheme.accent.opacity(0.88) }
+    static var slate: Color { SFThemeManager.shared.selectedTheme.accent.opacity(0.58) }
+    static var emerald: Color { SFThemeManager.shared.selectedTheme.accent }
+    static var farmGold: Color { SFThemeManager.shared.selectedTheme.gold }
+    static var violet: Color { SFThemeManager.shared.selectedTheme.accent.opacity(0.80) }
     static let crimson = Color(red: 0.82, green: 0.34, blue: 0.34)
-    static let amber = Color(red: 0.96, green: 0.59, blue: 0.22)
-    static let teal = Color(red: 0.22, green: 0.68, blue: 0.69)
+    static var amber: Color { SFThemeManager.shared.selectedTheme.gold }
+    static var teal: Color { SFThemeManager.shared.selectedTheme.accent }
+    static let red = Color(red: 1.00, green: 0.00, blue: 0.00)
+}
+
+// MARK: - UIKit theme refresh
+private enum SFUIKitThemeRefresh {
+    static func apply(to controller: UIViewController) {
+        controller.view.backgroundColor = SFUIKitTheme.background
+        controller.view.tintColor = SFUIKitTheme.accent
+        controller.navigationController?.navigationBar.tintColor = SFUIKitTheme.gold
+        if let table = controller.view as? UITableView {
+            table.backgroundColor = SFUIKitTheme.background
+            table.separatorColor = SFUIKitTheme.border.withAlphaComponent(0.45)
+            table.tintColor = SFUIKitTheme.accent
+            table.reloadData()
+        }
+        for child in controller.children {
+            apply(to: child)
+        }
+    }
+}
+
+// MARK: - UIKit theme colors
+private enum SFUIKitTheme {
+    static var background: UIColor { UIColor(SF.background) }
+    static var panel: UIColor { UIColor(SF.panel) }
+    static var accent: UIColor { UIColor(SF.accent) }
+    static var gold: UIColor { UIColor(SF.gold) }
+    static var border: UIColor { UIColor(SF.border) }
+    static var text: UIColor { UIColor(SF.text) }
+    static var secondary: UIColor { UIColor(SF.secondary) }
 }
 
 
-// =====================================================
-// FALLOUT SHELTER ENGINE — ported from FSSE iOS v1.2.1
-// =====================================================
-
 import CommonCrypto
 
+// MARK: - Fallout Shelter save engine
 func fsseError(_ message: String) -> NSError {
     NSError(domain: "SAVEFORGE.FalloutShelter", code: 1,
             userInfo: [NSLocalizedDescriptionKey: message])
@@ -3200,7 +5701,6 @@ extension Data {
     }
 }
 
-
 struct FSSEDwellerCatalogItem {
     let id: String
     let name: String
@@ -3210,6 +5710,7 @@ struct FSSEDwellerCatalogItem {
     var displayName: String { [name, lastName].filter { !$0.isEmpty }.joined(separator: " ") }
 }
 
+// MARK: - Fallout Shelter save store
 final class FSSEStore {
     static let shared = FSSEStore()
     private init() {}
@@ -3222,6 +5723,16 @@ final class FSSEStore {
     )
     private let aesIV = Data(hex: "7475383967656A693334307438397532")
     var isLoaded: Bool { save != nil }
+
+    var seasonID: String {
+        (save?["seasonId"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    var isSeasonVault: Bool {
+        guard !seasonID.isEmpty else { return false }
+        return resources["PokerChip"] != nil
+    }
 
     func decrypt(_ encrypted: Data) throws -> [String: Any] {
         guard let text = String(data: encrypted, encoding: .utf8) else {
@@ -3244,7 +5755,6 @@ final class FSSEStore {
         try validateSaveStructure(save)
         let json = try JSONSerialization.data(withJSONObject: save, options: [.sortedKeys])
         let encrypted = try crypt(json, operation: CCOperation(kCCEncrypt))
-        // Verify the encrypted payload can be decrypted and parsed before it is offered for export.
         let verification = try crypt(encrypted, operation: CCOperation(kCCDecrypt))
         guard let verified = try JSONSerialization.jsonObject(with: verification) as? [String: Any] else {
             throw fsseError("Export verification failed. No file was exported.")
@@ -3301,9 +5811,6 @@ final class FSSEStore {
         }
     }
 
-    // The UI field is intentionally labelled VaultID, but Fallout Shelter's
-    // displayed vault identifier for this editor comes from the VaultName key.
-    // Preserve the original string exactly and write edits back to VaultName.
     var vaultID: String {
         get { vault["VaultName"] as? String ?? "Unknown" }
         set {
@@ -3392,8 +5899,6 @@ final class FSSEStore {
         person["happiness"] = happinessData
         var statsData = person["stats"] as? [String: Any] ?? [:]
         var stats = statsData["stats"] as? [[String: Any]] ?? []
-        // Fallout Shelter stores SPECIAL in stat-record positions 1...7.
-        // Position 0 is a separate non-SPECIAL record and must remain untouched.
         let specialRecordIndexes = [1, 2, 3, 4, 5, 6, 7]
         guard stats.count > 7, special.count >= 7 else { return }
 
@@ -3418,8 +5923,6 @@ final class FSSEStore {
         container["dwellers"] = list
         root["dwellers"] = container
 
-        // If the resident was still waiting at the Vault Door, remove that
-        // queue reference too so the save cannot point at a deleted resident.
         if let removedID {
             var spawner = root["dwellerSpawner"] as? [String: Any] ?? [:]
             let waiting = spawner["dwellersWaiting"] as? [[String: Any]] ?? []
@@ -3431,8 +5934,6 @@ final class FSSEStore {
         save = root
     }
 
-    // Adds a unique dweller to the save roster and registers that dweller in
-    // the game's actual Vault Door arrival queue (dwellerSpawner.dwellersWaiting).
     func addUniqueDweller(_ item: FSSEDwellerCatalogItem) throws {
         guard isLoaded else { throw fsseError("Import a vault before adding dwellers.") }
         var root = save!
@@ -3440,9 +5941,6 @@ final class FSSEStore {
         guard var person = list.first else {
             throw fsseError("This vault has no dweller template. Add a resident in-game first.")
         }
-        // Compare only the canonical unique-dweller catalog key. Catalog JSON may
-        // also contain an unrelated `id` field, so the dictionary key is retained
-        // separately as `_saveforgeCatalogID` when the catalog is loaded.
         let canonicalID = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
         if let match = list.first(where: { person in
             guard let savedID = person["uniqueData"] as? String else { return false }
@@ -3482,8 +5980,6 @@ final class FSSEStore {
         if let values = source["stats"] as? [Int], values.count >= 7 {
             var container = person["stats"] as? [String: Any] ?? [:]
             var stats = container["stats"] as? [[String: Any]] ?? []
-            // Catalog values are ordered S, P, E, C, I, A, L;
-            // the save stores them at record indexes 1...7.
             let specialRecordIndexes = [1, 2, 3, 4, 5, 6, 7]
             if stats.count > 7 {
                 for (specialPosition, recordIndex) in specialRecordIndexes.enumerated() {
@@ -3511,9 +6007,6 @@ final class FSSEStore {
         }
         person["health"] = health
 
-        // The queue stores a reference to the new dweller by serializeId.
-        // Keep the game's existing queue entries intact and append Preston (or
-        // whichever unique dweller was selected) as a new arrival at the door.
         list.append(person)
         var dwellersContainer = root["dwellers"] as? [String: Any] ?? [:]
         dwellersContainer["dwellers"] = list
@@ -3544,7 +6037,6 @@ final class FSSEStore {
             save = root
         }
     }
-    // Each Add Item action is limited to 20 units; repeated additions may grow the stored total beyond 20.
     @discardableResult
     func addInventoryItem(id: String, type: String, quantity: Int) -> Int {
         guard quantity > 0 else { return 0 }
@@ -3602,14 +6094,13 @@ final class FSSEStore {
     }
 }
 
+// MARK: - Fallout Shelter catalog
 final class FSSEDependencyCatalog {
     static let shared = FSSEDependencyCatalog()
     private init() {}
     private let baseURL = "https://raw.githubusercontent.com/dneverson/fallout-shelter-save-editor/main/public/gamedata/"
     private let filenames = ["weapons.json", "outfits.json", "pets.json", "junk.json", "unique-dwellers.json"]
     private var folder: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("SAVEFORGE/VaultDependencies", isDirectory: true) }
-    // Cheap existence/size check: this runs once per second from a TimelineView, so it must
-    // not read or parse the catalogs. downloadAll only writes files that already parsed as JSON.
     var allDependenciesInstalled: Bool {
         let fm = FileManager.default
         return filenames.allSatisfy { file in
@@ -3651,9 +6142,6 @@ final class FSSEDependencyCatalog {
             return dict.compactMap { key, value in
                 guard var entry = value as? [String: Any] else { return nil }
                 if name == "dwellers" {
-                    // The JSON object's key (for example, L_Preston) is the stable
-                    // Fallout Shelter uniqueData identifier. Never substitute an
-                    // unrelated `id` property from inside the catalog record.
                     entry["_saveforgeCatalogID"] = key
                     if entry["name"] == nil && entry["Name"] == nil { return nil }
                     if entry["isHidden"] as? Bool == true { return nil }
@@ -3682,8 +6170,6 @@ final class FSSEDependencyCatalog {
             return names[n] ?? "Unknown Room (\(n))"
         }
 
-        // Save files commonly store internal class identifiers such as
-        // RoomPowerGenerator rather than the human-readable room title.
         let key = value.lowercased().filter { $0.isLetter || $0.isNumber }
         let aliases: [String: String] = [
             "entrance": "Vault Entrance", "vaultentrance": "Vault Entrance",
@@ -3719,7 +6205,6 @@ final class FSSEDependencyCatalog {
         ]
         if let name = aliases[key] { return name }
 
-        // Make unfamiliar internal identifiers readable instead of showing raw class names.
         var readable = value
         if readable.hasPrefix("Room") { readable.removeFirst(4) }
         readable = readable.replacingOccurrences(of: "_", with: " ")
@@ -3750,6 +6235,357 @@ final class FSSEDependencyCatalog {
     }
 }
 
+
+private final class FSSESeasonPassStore {
+    static let shared = FSSESeasonPassStore()
+    private init() {}
+
+    var data: [String: Any]?
+    var originalFileName = "spd.dat"
+
+    private let aesKey = Data(hex:
+        "A7CA9F3366D892C2F0BEF417341CA971" +
+        "B69AE9F7BACCCFFCF43C62D1D7D021F9"
+    )
+    private let aesIV = Data(hex: "7475383967656A693334307438397532")
+
+    var isLoaded: Bool { data != nil }
+    var currentSeason: String { data?["currentSeason"] as? String ?? "Unknown" }
+    var currentLevel: Int { (data?["currentLevel"] as? NSNumber)?.intValue ?? 0 }
+    var currentTokens: Int { (data?["currentTokens"] as? NSNumber)?.intValue ?? 0 }
+
+    private var seasonsData: [String: Any] {
+        data?["seasonsData"] as? [String: Any] ?? [:]
+    }
+
+    private var currentSeasonData: [String: Any] {
+        seasonsData[currentSeason] as? [String: Any] ?? [:]
+    }
+
+    var isPremium: Bool { currentSeasonData["isPremium"] as? Bool ?? false }
+    var isPremiumPlus: Bool { currentSeasonData["isPremiumPlus"] as? Bool ?? false }
+    var maxRankAchieved: Int {
+        (currentSeasonData["maxRankAchieved"] as? NSNumber)?.intValue ?? 0
+    }
+    var freeRewardCount: Int {
+        (currentSeasonData["freeRewardsList"] as? [Any])?.count ?? 0
+    }
+    var premiumRewardCount: Int {
+        (currentSeasonData["premiumRewardsList"] as? [Any])?.count ?? 0
+    }
+    var claimedRewardCount: Int {
+        (data?["claimed"] as? [Any])?.count ?? 0
+    }
+    var completedChallengeCount: Int {
+        (data?["completed"] as? [Any])?.count ?? 0
+    }
+
+    func decrypt(_ encrypted: Data) throws -> [String: Any] {
+        guard let text = String(data: encrypted, encoding: .utf8) else {
+            throw fsseError("spd.dat is not valid Base64 text.")
+        }
+        let cleaned = text.components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let input = Data(base64Encoded: cleaned) else {
+            throw fsseError("Unable to Base64-decode spd.dat.")
+        }
+        let plain = try crypt(input, operation: CCOperation(kCCDecrypt))
+        guard let object = try JSONSerialization.jsonObject(with: plain) as? [String: Any],
+              let season = object["currentSeason"] as? String,
+              let seasons = object["seasonsData"] as? [String: Any],
+              seasons[season] is [String: Any],
+              object["currentLevel"] is NSNumber,
+              object["currentTokens"] is NSNumber else {
+            throw fsseError("This is not a supported Fallout Shelter spd.dat file.")
+        }
+        return object
+    }
+
+    func encrypt() throws -> Data {
+        guard let data else { throw fsseError("Import spd.dat before exporting.") }
+        guard let season = data["currentSeason"] as? String,
+              let seasons = data["seasonsData"] as? [String: Any],
+              seasons[season] is [String: Any] else {
+            throw fsseError("Season data is incomplete. Nothing was exported.")
+        }
+        let json = try JSONSerialization.data(withJSONObject: data, options: [.sortedKeys])
+        let encrypted = try crypt(json, operation: CCOperation(kCCEncrypt))
+        let verified = try crypt(encrypted, operation: CCOperation(kCCDecrypt))
+        guard let check = try JSONSerialization.jsonObject(with: verified) as? [String: Any],
+              check["currentSeason"] as? String == season else {
+            throw fsseError("spd.dat export verification failed.")
+        }
+        return Data(encrypted.base64EncodedString().utf8)
+    }
+
+    func setCurrentLevel(_ value: Int) {
+        guard var root = data else { return }
+        root["currentLevel"] = max(0, min(value, 999))
+        data = root
+    }
+
+    func setCurrentTokens(_ value: Int) {
+        guard var root = data else { return }
+        root["currentTokens"] = max(0, min(value, 999999))
+        data = root
+    }
+
+    func setPremium(_ enabled: Bool) {
+        setCurrentSeasonFlag("isPremium", enabled: enabled)
+    }
+
+    func setPremiumPlus(_ enabled: Bool) {
+        setCurrentSeasonFlag("isPremiumPlus", enabled: enabled)
+    }
+
+    private func setCurrentSeasonFlag(_ key: String, enabled: Bool) {
+        guard var root = data,
+              var allSeasons = root["seasonsData"] as? [String: Any],
+              var season = allSeasons[currentSeason] as? [String: Any] else { return }
+        season[key] = enabled
+        allSeasons[currentSeason] = season
+        root["seasonsData"] = allSeasons
+        data = root
+    }
+
+    private func crypt(_ input: Data, operation: CCOperation) throws -> Data {
+        let capacity = input.count + kCCBlockSizeAES128
+        var output = Data(count: capacity)
+        var moved = 0
+        let status = aesKey.withUnsafeBytes { key in
+            aesIV.withUnsafeBytes { iv in
+                input.withUnsafeBytes { source in
+                    output.withUnsafeMutableBytes { destination in
+                        CCCrypt(operation, CCAlgorithm(kCCAlgorithmAES),
+                                CCOptions(kCCOptionPKCS7Padding),
+                                key.baseAddress, kCCKeySizeAES256,
+                                iv.baseAddress, source.baseAddress, input.count,
+                                destination.baseAddress, capacity, &moved)
+                    }
+                }
+            }
+        }
+        guard status == kCCSuccess else {
+            throw fsseError("spd.dat AES operation failed. Status: \(status)")
+        }
+        output.count = moved
+        return output
+    }
+}
+
+// MARK: - Fallout Shelter season pass editor
+private final class FalloutSeasonPassController: UITableViewController, UIDocumentPickerDelegate {
+    private var themeObserver: NSObjectProtocol?
+
+    private func observeThemeChanges() {
+        themeObserver = NotificationCenter.default.addObserver(
+            forName: .saveforgeThemeDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            SFUIKitThemeRefresh.apply(to: self)
+        }
+    }
+
+    deinit {
+        if let themeObserver = themeObserver {
+            NotificationCenter.default.removeObserver(themeObserver)
+        }
+    }
+
+    private let store = FSSESeasonPassStore.shared
+    private var loaded: Bool { store.isLoaded }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        observeThemeChanges()
+        title = "SEASON PASS"
+        view.backgroundColor = SFUIKitTheme.background
+        tableView.backgroundColor = view.backgroundColor
+        tableView.separatorColor = UIColor(white: 0.22, alpha: 1)
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "seasonPassCell")
+        tableView.rowHeight = 58
+        tableView.estimatedRowHeight = 58
+        tableView.sectionHeaderTopPadding = 4
+        tableView.tintColor = SFUIKitTheme.accent
+        navigationController?.navigationBar.tintColor = SFUIKitTheme.gold
+        navigationItem.rightBarButtonItems = [
+            UIBarButtonItem(title: "Export", style: .done, target: self, action: #selector(exportSeasonData)),
+            UIBarButtonItem(title: "Import", style: .plain, target: self, action: #selector(importSeasonData))
+        ]
+        tableView.tableFooterView = footer()
+    }
+
+    private func footer() -> UIView {
+        let label = UILabel(frame: CGRect(x: 0, y: 0, width: view.bounds.width, height: 76))
+        label.text = "SAVEFORGE • SPD.DAT EDITOR\nPremium ownership is displayed for diagnostics. Paid access remains subject to Bethesda / platform purchase verification."
+        label.textColor = .secondaryLabel
+        label.font = .monospacedSystemFont(ofSize: 9, weight: .medium)
+        label.numberOfLines = 3
+        label.textAlignment = .center
+        return label
+    }
+
+    @objc private func importSeasonData() {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)
+        picker.allowsMultipleSelection = false
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    @objc private func exportSeasonData() {
+        do {
+            let output = try store.encrypt()
+            let filename = store.originalFileName.isEmpty ? "spd.dat" : store.originalFileName
+            let exportName = "SAVEFORGE-" + filename
+            let url = AppFileStore.exportsDirectory.appendingPathComponent(exportName)
+            try output.write(to: url, options: .atomic)
+            let alert = UIAlertController(
+                title: "Season Data Export Ready",
+                message: "A verified edited backup was saved in SAVEFORGE/Exports as \(exportName). Your original spd.dat was not overwritten.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Choose Location", style: .default) { [weak self] _ in
+                let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
+                self?.present(picker, animated: true)
+            })
+            present(alert, animated: true)
+        } catch {
+            showAlert(title: "Export Failed", message: error.localizedDescription)
+        }
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else { return }
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let fileData = try Data(contentsOf: url)
+            let decoded = try store.decrypt(fileData)
+            store.data = decoded
+            store.originalFileName = url.lastPathComponent
+            do { try AppFileStore.importFile(url) } catch { /* Import remains usable if backup copy fails. */ }
+            tableView.reloadData()
+            showAlert(
+                title: "Season Data Imported",
+                message: "Season: \(store.currentSeason)\nLevel: \(store.currentLevel)\nTokens: \(store.currentTokens)\nPremium status: \(store.isPremium ? "True" : "False")\nPremium Plus: \(store.isPremiumPlus ? "True" : "False")"
+            )
+        } catch {
+            showAlert(title: "Import Failed", message: error.localizedDescription)
+        }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {}
+
+    override func numberOfSections(in tableView: UITableView) -> Int { 1 }
+
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        loaded ? "SEASON DATA • \(store.currentSeason)" : "IMPORT SPD.DAT TO BEGIN"
+    }
+
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        loaded ? 10 : 1
+    }
+
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "seasonPassCell", for: indexPath)
+        cell.backgroundColor = SFUIKitTheme.panel
+        cell.textLabel?.textColor = SFUIKitTheme.text
+        cell.textLabel?.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
+        cell.selectionStyle = .default
+        cell.accessoryType = .none
+        cell.accessoryView = nil
+
+        guard loaded else {
+            cell.textLabel?.text = "IMPORT SPD.DAT TO VIEW SEASON DATA"
+            cell.textLabel?.textColor = .secondaryLabel
+            cell.accessoryType = .disclosureIndicator
+            return cell
+        }
+
+        let values: [(String, String, Bool)] = [
+            ("Current Season", store.currentSeason, false),
+            ("Current Level", "\(store.currentLevel)", true),
+            ("Season Tokens", "\(store.currentTokens)", true),
+            ("Maximum Rank", "\(store.maxRankAchieved)", false),
+            ("Premium Pass Ownership", store.isPremium ? "TRUE" : "FALSE", false),
+            ("Premium Plus Ownership", store.isPremiumPlus ? "TRUE" : "FALSE", false),
+            ("Free Reward Entries", "\(store.freeRewardCount)", false),
+            ("Premium Reward Entries", "\(store.premiumRewardCount)", false),
+            ("Claimed Reward Records", "\(store.claimedRewardCount)", false),
+            ("Completed Challenges", "\(store.completedChallengeCount)", false)
+        ]
+        let item = values[indexPath.row]
+        cell.textLabel?.text = "\(item.0)  •  \(item.1)"
+        if indexPath.row == 4 || indexPath.row == 5 {
+            let toggle = UISwitch()
+            toggle.onTintColor = UIColor.systemGreen
+            toggle.isOn = indexPath.row == 4 ? store.isPremium : store.isPremiumPlus
+            toggle.tag = indexPath.row
+            toggle.addTarget(self, action: #selector(premiumFlagChanged(_:)), for: .valueChanged)
+            cell.accessoryView = toggle
+            cell.selectionStyle = .none
+            cell.textLabel?.text = item.0
+            cell.textLabel?.textColor = toggle.isOn ? UIColor.systemGreen : UIColor.secondaryLabel
+        } else {
+            cell.accessoryView = nil
+            if item.2 { cell.accessoryType = .disclosureIndicator }
+        }
+        return cell
+    }
+
+    @objc private func premiumFlagChanged(_ sender: UISwitch) {
+        switch sender.tag {
+        case 4: store.setPremium(sender.isOn)
+        case 5: store.setPremiumPlus(sender.isOn)
+        default: return
+        }
+        tableView.reloadRows(at: [IndexPath(row: sender.tag, section: 0)], with: .none)
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard loaded else {
+            importSeasonData()
+            return
+        }
+        switch indexPath.row {
+        case 1: promptNumber(title: "Edit Season Level", current: store.currentLevel) { [weak self] in
+            self?.store.setCurrentLevel($0); self?.tableView.reloadData()
+        }
+        case 2: promptNumber(title: "Edit Season Tokens", current: store.currentTokens) { [weak self] in
+            self?.store.setCurrentTokens($0); self?.tableView.reloadData()
+        }
+        default: break
+        }
+    }
+
+    private func promptNumber(title: String, current: Int, completion: @escaping (Int) -> Void) {
+        let alert = UIAlertController(title: title, message: "Enter a non-negative whole number.", preferredStyle: .alert)
+        alert.addTextField { field in
+            field.keyboardType = .numberPad
+            field.text = "\(current)"
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
+            guard let text = alert.textFields?.first?.text,
+                  let value = Int(text), value >= 0 else {
+                self.showAlert(title: "Invalid Value", message: "Enter a valid non-negative whole number.")
+                return
+            }
+            completion(value)
+        })
+        present(alert, animated: true)
+    }
+
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+}
+
 private extension UIApplication {
     var topMostViewController: UIViewController? {
         let root = connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?.rootViewController
@@ -3759,23 +6595,38 @@ private extension UIApplication {
     }
 }
 
-// =====================================================
-// FALLOUT SHELTER EDITOR HOST
-// UIKit bridge avoids SwiftUI property wrappers in Nyxian.
-// =====================================================
 
 private struct FalloutShelterEditorHost: UIViewControllerRepresentable {
     let moduleTitle: String
     func makeUIViewController(context: Context) -> UIViewController {
-        FalloutShelterEditorController(moduleTitle: moduleTitle)
+        if moduleTitle == "Season Pass" {
+            return FalloutSeasonPassController()
+        }
+        return FalloutShelterEditorController(moduleTitle: moduleTitle)
     }
     func updateUIViewController(_ controller: UIViewController, context: Context) {}
 }
 
-
-// Searchable unique-dweller catalog picker. Uses a real table/search interface
-// rather than a truncated action sheet, so the complete JSON catalog is browsable.
 private final class SAVEFORGEDwellerCatalogPicker: UITableViewController, UISearchResultsUpdating {
+    private var themeObserver: NSObjectProtocol?
+
+    private func observeThemeChanges() {
+        themeObserver = NotificationCenter.default.addObserver(
+            forName: .saveforgeThemeDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            SFUIKitThemeRefresh.apply(to: self)
+        }
+    }
+
+    deinit {
+        if let themeObserver = themeObserver {
+            NotificationCenter.default.removeObserver(themeObserver)
+        }
+    }
+
     private let entries: [[String: Any]]
     private let onSelect: ([String: Any]) -> Void
     private let alreadyAddedIDs: Set<String>
@@ -3797,7 +6648,8 @@ private final class SAVEFORGEDwellerCatalogPicker: UITableViewController, UISear
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.012, green: 0.020, blue: 0.026, alpha: 1)
+        observeThemeChanges()
+        view.backgroundColor = SFUIKitTheme.background
         tableView.backgroundColor = view.backgroundColor
         tableView.separatorColor = UIColor(white: 0.22, alpha: 1)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "dwellerCatalogCell")
@@ -3807,7 +6659,7 @@ private final class SAVEFORGEDwellerCatalogPicker: UITableViewController, UISear
         searchController.searchResultsUpdater = self
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchBar.placeholder = "Search dwellers by name or rarity"
-        searchController.searchBar.tintColor = UIColor(red: 0.20, green: 0.88, blue: 0.96, alpha: 1)
+        searchController.searchBar.tintColor = SFUIKitTheme.accent
         searchController.searchBar.searchTextField.textColor = .white
         navigationItem.searchController = searchController
         navigationItem.hidesSearchBarWhenScrolling = false
@@ -3857,13 +6709,13 @@ private final class SAVEFORGEDwellerCatalogPicker: UITableViewController, UISear
         content.textProperties.color = alreadyAdded ? UIColor(white: 0.58, alpha: 1) : .white
         content.secondaryTextProperties.color = alreadyAdded
             ? UIColor(red: 0.78, green: 0.62, blue: 0.30, alpha: 1)
-            : UIColor(red: 0.20, green: 0.88, blue: 0.96, alpha: 1)
+            : SFUIKitTheme.accent
         content.textProperties.font = .monospacedSystemFont(ofSize: 15, weight: .semibold)
         content.secondaryTextProperties.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
         cell.contentConfiguration = content
 
-        let normalBackground = UIColor(red: 0.025, green: 0.040, blue: 0.050, alpha: 1)
-        let selectedBackground = UIColor(red: 0.035, green: 0.22, blue: 0.25, alpha: 1)
+        let normalBackground = SFUIKitTheme.background
+        let selectedBackground = SFUIKitTheme.accent.withAlphaComponent(0.35)
         if alreadyAdded {
             cell.backgroundColor = normalBackground
             cell.accessoryType = .none
@@ -3871,7 +6723,7 @@ private final class SAVEFORGEDwellerCatalogPicker: UITableViewController, UISear
         } else if selectedIndexPath == indexPath {
             cell.backgroundColor = selectedBackground
             cell.accessoryType = .checkmark
-            cell.tintColor = UIColor(red: 0.20, green: 0.92, blue: 0.98, alpha: 1)
+            cell.tintColor = SFUIKitTheme.accent
             cell.selectionStyle = .default
         } else {
             cell.backgroundColor = normalBackground
@@ -3885,8 +6737,6 @@ private final class SAVEFORGEDwellerCatalogPicker: UITableViewController, UISear
         guard !selectionHandled, filteredEntries.indices.contains(indexPath.row) else { return }
         guard !isAlreadyAdded(filteredEntries[indexPath.row]) else { return }
 
-        // Give immediate, unmistakable feedback so a tap is not mistaken for
-        // merely dismissing the search keyboard.
         selectionHandled = true
         selectedIndexPath = indexPath
         let selected = filteredEntries[indexPath.row]
@@ -3900,7 +6750,6 @@ private final class SAVEFORGEDwellerCatalogPicker: UITableViewController, UISear
         tableView.isUserInteractionEnabled = false
         navigationItem.leftBarButtonItem?.isEnabled = false
 
-        // Keep the checkmark and ADDING status visible briefly before closing.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { [weak self] in
             guard let self else { return }
             self.dismiss(animated: true) {
@@ -3918,9 +6767,26 @@ private final class SAVEFORGEDwellerCatalogPicker: UITableViewController, UISear
     }
 }
 
-// Searchable inventory picker, matching the dweller catalog experience.
-// Shows the complete installed JSON catalogs and filters across item name, ID, and category.
 private final class SAVEFORGEInventoryCatalogPicker: UITableViewController, UISearchResultsUpdating {
+    private var themeObserver: NSObjectProtocol?
+
+    private func observeThemeChanges() {
+        themeObserver = NotificationCenter.default.addObserver(
+            forName: .saveforgeThemeDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            SFUIKitThemeRefresh.apply(to: self)
+        }
+    }
+
+    deinit {
+        if let themeObserver = themeObserver {
+            NotificationCenter.default.removeObserver(themeObserver)
+        }
+    }
+
     private let entries: [(record: [String: Any], catalog: String)]
     private let onSelect: ([String: Any], String) -> Void
     private var filteredEntries: [(record: [String: Any], catalog: String)]
@@ -3938,7 +6804,8 @@ private final class SAVEFORGEInventoryCatalogPicker: UITableViewController, UISe
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.012, green: 0.020, blue: 0.026, alpha: 1)
+        observeThemeChanges()
+        view.backgroundColor = SFUIKitTheme.background
         tableView.backgroundColor = view.backgroundColor
         tableView.separatorColor = UIColor(white: 0.22, alpha: 1)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "inventoryCatalogCell")
@@ -3948,7 +6815,7 @@ private final class SAVEFORGEInventoryCatalogPicker: UITableViewController, UISe
         searchController.searchResultsUpdater = self
         searchController.obscuresBackgroundDuringPresentation = false
         searchController.searchBar.placeholder = "Search items by name, ID, or category"
-        searchController.searchBar.tintColor = UIColor(red: 0.20, green: 0.88, blue: 0.96, alpha: 1)
+        searchController.searchBar.tintColor = SFUIKitTheme.accent
         searchController.searchBar.searchTextField.textColor = .white
         navigationItem.searchController = searchController
         navigationItem.hidesSearchBarWhenScrolling = false
@@ -3984,11 +6851,11 @@ private final class SAVEFORGEInventoryCatalogPicker: UITableViewController, UISe
         content.text = name
         content.secondaryText = rarity.map { "\(item.catalog.uppercased()) • \($0) • ID: \(id)" } ?? "\(item.catalog.uppercased()) • ID: \(id)"
         content.textProperties.color = .white
-        content.secondaryTextProperties.color = UIColor(red: 0.20, green: 0.88, blue: 0.96, alpha: 1)
+        content.secondaryTextProperties.color = SFUIKitTheme.accent
         content.textProperties.font = .monospacedSystemFont(ofSize: 14, weight: .semibold)
         content.secondaryTextProperties.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
         cell.contentConfiguration = content
-        cell.backgroundColor = UIColor(red: 0.025, green: 0.040, blue: 0.050, alpha: 1)
+        cell.backgroundColor = SFUIKitTheme.background
         cell.accessoryType = .disclosureIndicator
         return cell
     }
@@ -4009,12 +6876,32 @@ private final class SAVEFORGEInventoryCatalogPicker: UITableViewController, UISe
     }
 }
 
+// MARK: - Fallout Shelter editor
 private final class FalloutShelterEditorController: UITableViewController, UIDocumentPickerDelegate {
+    private var themeObserver: NSObjectProtocol?
+
+    private func observeThemeChanges() {
+        themeObserver = NotificationCenter.default.addObserver(
+            forName: .saveforgeThemeDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            SFUIKitThemeRefresh.apply(to: self)
+        }
+    }
+
+    deinit {
+        if let themeObserver = themeObserver {
+            NotificationCenter.default.removeObserver(themeObserver)
+        }
+    }
+
     private let store = FSSEStore.shared
     private let moduleTitle: String
     private var activeSection: Section {
         switch moduleTitle {
-        case "Resources": return .resources
+        case "Resources", "Season Vault": return .resources
         case "Dwellers": return .dwellers
         case "Inventory": return .inventory
         case "Rooms": return .rooms
@@ -4037,10 +6924,11 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        observeThemeChanges()
         title = moduleTitle == "Dwellers" && store.isLoaded
             ? "DWELLERS • \(store.originalFileName) • \(store.dwellers.count)"
             : moduleTitle.uppercased()
-        view.backgroundColor = UIColor(red: 0.012, green: 0.020, blue: 0.026, alpha: 1)
+        view.backgroundColor = SFUIKitTheme.background
         tableView.backgroundColor = view.backgroundColor
         tableView.separatorColor = UIColor(white: 0.22, alpha: 1)
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
@@ -4051,8 +6939,8 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
         tableView.scrollIndicatorInsets = .zero
         tableView.contentInsetAdjustmentBehavior = .automatic
         tableView.keyboardDismissMode = .onDrag
-        tableView.tintColor = UIColor(red: 0.20, green: 0.88, blue: 0.96, alpha: 1)
-        navigationController?.navigationBar.tintColor = UIColor(red: 0.91, green: 0.70, blue: 0.30, alpha: 1)
+        tableView.tintColor = SFUIKitTheme.accent
+        navigationController?.navigationBar.tintColor = SFUIKitTheme.gold
         navigationItem.rightBarButtonItems = moduleTitle == "Export Save" ? [
             UIBarButtonItem(title: "Import", style: .plain, target: self, action: #selector(importSave))
         ] : [
@@ -4065,7 +6953,6 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
 
     private func configureModuleAction() {
         guard activeSection == .dwellers || activeSection == .inventory else { return }
-        // Explicit sizing avoids tableHeaderView/Auto Layout width glitches in Nyxian.
         let width = max(0, tableView.bounds.width)
         let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: 68))
         container.backgroundColor = tableView.backgroundColor
@@ -4076,11 +6963,11 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
         button.titleLabel?.font = .monospacedSystemFont(ofSize: 13, weight: .bold)
         button.titleLabel?.adjustsFontSizeToFitWidth = true
         button.titleLabel?.minimumScaleFactor = 0.8
-        button.setTitleColor(UIColor(red: 0.20, green: 0.88, blue: 0.96, alpha: 1), for: .normal)
-        button.backgroundColor = UIColor(red: 0.035, green: 0.075, blue: 0.085, alpha: 1)
+        button.setTitleColor(SFUIKitTheme.accent, for: .normal)
+        button.backgroundColor = SFUIKitTheme.panel
         button.layer.cornerRadius = 12
         button.layer.borderWidth = 1
-        button.layer.borderColor = UIColor(red: 0.20, green: 0.72, blue: 0.78, alpha: 0.75).cgColor
+        button.layer.borderColor = SFUIKitTheme.accent.withAlphaComponent(0.75).cgColor
         button.addTarget(self, action: activeSection == .dwellers ? #selector(addDwellerFromJSON) : #selector(addInventoryFromJSON), for: .touchUpInside)
         button.frame = CGRect(x: 16, y: 8, width: max(0, width - 32), height: 52)
         button.autoresizingMask = [.flexibleWidth]
@@ -4185,11 +7072,11 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
             let data = try store.encrypt()
             let filename = store.originalFileName.isEmpty ? "Vault-Edited.sav" : store.originalFileName
             let exportName = "SAVEFORGE-" + filename
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(exportName)
+            let url = AppFileStore.exportsDirectory.appendingPathComponent(exportName)
             try data.write(to: url, options: .atomic)
             let notice = UIAlertController(
                 title: "Export Ready",
-                message: "This will be saved as \(exportName).\n\nThe SAVEFORGE- prefix keeps it from replacing your existing save. Before the game can use it, rename it to \(filename) (the slot you want to replace).",
+                message: "A backup has been saved in SAVEFORGE/Exports as \(exportName).\n\nThe SAVEFORGE- prefix keeps it from replacing your existing save. Before the game can use it, rename it to \(filename) (the slot you want to replace).",
                 preferredStyle: .alert
             )
             notice.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -4212,7 +7099,6 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
             let decoded = try store.decrypt(data)
             store.save = decoded
             store.originalFileName = url.lastPathComponent
-            // Keep a backup copy of every successfully imported save in Settings > Imported Files.
             do { try AppFileStore.importFile(url) }
             catch { showAlert(title: "Vault Imported — Backup Copy Failed", message: "The save was loaded, but SAVEFORGE could not copy it into Settings > Imported Files. \(error.localizedDescription)") }
             statusMessage = "Loaded \(url.lastPathComponent)"
@@ -4247,7 +7133,7 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
     }
 
     private var resourceRows: [(key: String, title: String, symbol: String, value: Double, boxType: Int?)] {
-        let definitions: [(String, String, String)] = [
+        var definitions: [(String, String, String)] = [
             ("Nuka", "Bottle Caps", "bitcoinsign.circle.fill"),
             ("NukaColaQuantum", "Nuka-Cola Quantum", "drop.fill"),
             ("Food", "Food", "fork.knife"),
@@ -4256,6 +7142,9 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
             ("StimPack", "Stimpaks", "cross.case.fill"),
             ("RadAway", "RadAway", "cross.vial.fill")
         ]
+        if store.isSeasonVault {
+            definitions.append(("PokerChip", "Poker Chips", "circle.grid.2x2.fill"))
+        }
         let hiddenTrackers: Set<String> = ["Population", "Happiness", "VaultLevel", "VaultSize", "Dwellers", "RoomCount", "Rooms"]
         var rows: [(key: String, title: String, symbol: String, value: Double, boxType: Int?)] = []
         for (key, title, symbol) in definitions {
@@ -4273,8 +7162,10 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
             let count = store.lunchBoxCount(for: type)
             rows.append((key, title, symbol, Double(count), type))
         }
-        // Ignore non-editable tracker fields and the retired Poker Chips resource.
-        rows.removeAll { hiddenTrackers.contains($0.key) || $0.key.lowercased() == "pokerchip" || $0.key.lowercased() == "pokerchips" }
+        rows.removeAll { hiddenTrackers.contains($0.key) }
+        if moduleTitle == "Season Vault" {
+            rows = rows.filter { $0.key == "PokerChip" }
+        }
         return rows
     }
 
@@ -4293,10 +7184,10 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.backgroundColor = UIColor(red: 0.035, green: 0.060, blue: 0.071, alpha: 1)
-        cell.textLabel?.textColor = UIColor(red: 0.82, green: 0.91, blue: 0.94, alpha: 1)
+        cell.backgroundColor = SFUIKitTheme.panel
+        cell.textLabel?.textColor = SFUIKitTheme.text
         cell.textLabel?.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
-        cell.detailTextLabel?.textColor = UIColor(red: 0.48, green: 0.62, blue: 0.67, alpha: 1)
+        cell.detailTextLabel?.textColor = SFUIKitTheme.secondary
         cell.accessoryType = .none
         cell.selectionStyle = .default
 
@@ -4308,7 +7199,7 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
             case 1:
                 cell.textLabel?.text = loaded ? "EXPORT AN EDITED COPY" : "IMPORT A VAULT.SAV FIRST"
                 cell.imageView?.image = UIImage(systemName: "square.and.arrow.up")
-                cell.imageView?.tintColor = UIColor(red: 0.91, green: 0.70, blue: 0.30, alpha: 1)
+                cell.imageView?.tintColor = SFUIKitTheme.gold
                 cell.accessoryType = loaded ? .disclosureIndicator : .none
             default:
                 cell.textLabel?.text = "ORIGINAL FILE IS NEVER OVERWRITTEN"
@@ -4333,12 +7224,16 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
             cell.accessoryType = indexPath.row == 0 ? .disclosureIndicator : .none
         case .resources:
             let rows = resourceRows
-            if rows.isEmpty { cell.textLabel?.text = "No editable resources found" }
-            else {
+            if rows.isEmpty {
+                cell.textLabel?.text = moduleTitle == "Season Vault"
+                    ? (loaded ? "THIS IS NOT A SEASON VAULT" : "IMPORT A SEASON VAULT.SAV")
+                    : "No editable resources found"
+                cell.textLabel?.textColor = .secondaryLabel
+            } else {
                 let item = rows[indexPath.row]
                 cell.textLabel?.text = "\(item.title)  •  \(Int(item.value))"
                 cell.imageView?.image = UIImage(systemName: item.symbol)
-                cell.imageView?.tintColor = UIColor(red: 0.20, green: 0.88, blue: 0.96, alpha: 1)
+                cell.imageView?.tintColor = SFUIKitTheme.accent
                 cell.accessoryType = .disclosureIndicator
             }
         case .dwellers:
@@ -4371,7 +7266,7 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
                 default: typeSymbol = "cube.box.fill"
                 }
                 cell.imageView?.image = UIImage(systemName: typeSymbol)
-                cell.imageView?.tintColor = UIColor(red: 0.91, green: 0.70, blue: 0.30, alpha: 1)
+                cell.imageView?.tintColor = SFUIKitTheme.gold
                 cell.detailTextLabel?.text = "Tap to adjust quantity"
                 cell.accessoryType = .disclosureIndicator
             }
@@ -4549,5 +7444,12 @@ private final class FalloutShelterEditorController: UITableViewController, UIDoc
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+}
+
+private extension Data {
+    mutating func appendLE<T: FixedWidthInteger>(_ value: T) {
+        var littleEndian = value.littleEndian
+        Swift.withUnsafeBytes(of: &littleEndian) { append(contentsOf: $0) }
     }
 }
