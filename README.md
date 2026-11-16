@@ -108,7 +108,7 @@ SAVEFORGE is developed using:
 * UIKit
 * Native iOS frameworks
 
-The project is developed and built using Nyxian IDE.
+The project is developed and built using a rebuilt version of Nyxian IDE, by myslef, for refined mobile editing.
 
 # **Roadmap**
 
