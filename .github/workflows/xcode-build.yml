@@ -1,0 +1,74 @@
+name: Xcode iOS Build
+
+on:
+  push:
+    branches:
+      - xcode-native
+  pull_request:
+    branches:
+      - main
+      - Test
+      - xcode-native
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Prepare app icon asset catalog
+        run: |
+          mkdir -p Assets.xcassets/AppIcon.appiconset
+          cp extracted/B05E2494-0B4F-4E4E-AE1F-314341A54E79/Resources/AppIcon.png Assets.xcassets/AppIcon.appiconset/AppIcon.png
+          cat > Assets.xcassets/AppIcon.appiconset/Contents.json <<'EOF'
+          {
+            "images": [
+              {
+                "filename": "AppIcon.png",
+                "idiom": "universal",
+                "platform": "ios",
+                "size": "1024x1024"
+              }
+            ],
+            "info": {
+              "author": "xcode",
+              "version": 1
+            }
+          }
+          EOF
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild \
+            -project SAVEFORGE.xcodeproj \
+            -scheme SAVEFORGE \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Upload Xcode project
+        uses: actions/upload-artifact@v4
+        with:
+          name: SAVEFORGE-Xcode-Project
+          path: |
+            SAVEFORGE.xcodeproj
+            project.yml
+            Assets.xcassets
+          if-no-files-found: error
+          retention-days: 14
