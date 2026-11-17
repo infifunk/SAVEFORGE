@@ -2720,10 +2720,10 @@ private struct MinecraftEditorSectionScreen: View {
                     Text("MINECRAFT PNG ICON PACK")
                         .font(.system(size: 9, weight: .black, design: .monospaced)).foregroundStyle(SF.text)
                     Spacer()
-                    Text("\\(coverage.resolved) / \\(coverage.total) ICONS")
+                    Text("\(coverage.resolved) / \(coverage.total) ICONS")
                         .font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(gold)
                 }
-                Text("\\(coverage.resolved) / \\(coverage.total) catalog IDs currently resolve to PNG icons.")
+                Text("\(coverage.resolved) / \(coverage.total) catalog IDs currently resolve to PNG icons.")
                     .font(.system(size: 8, design: .monospaced)).foregroundStyle(SF.muted)
                 HStack(spacing: 8) {
                     Text(catalogBrowser.iconPackStatus)
@@ -3353,9 +3353,9 @@ private final class MinecraftCatalogBrowserModel: ObservableObject {
                 self?.isIconPackDownloading = false
                 switch result {
                 case .success(let count):
-                    self?.iconPackStatus = "Installed \\(count) Minecraft PNG icons · ready offline"
+                    self?.iconPackStatus = "Installed \(count) Minecraft PNG icons · ready offline"
                 case .failure(let error):
-                    self?.iconPackStatus = "Icon pack failed: \\(error.localizedDescription)"
+                    self?.iconPackStatus = "Icon pack failed: \(error.localizedDescription)"
                 }
             }
         })
