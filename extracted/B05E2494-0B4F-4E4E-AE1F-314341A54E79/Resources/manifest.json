@@ -1,0 +1,43 @@
+{
+  "name": "SAVEFORGE Current Game Icons",
+  "version": "0.1.0",
+  "format": "SVG",
+  "games": [
+    {
+      "id": "fallout-shelter",
+      "title": "Fallout Shelter",
+      "asset": "fallout-shelter.svg",
+      "currentSwiftUISymbol": "building.2.crop.circle"
+    },
+    {
+      "id": "stardew-valley",
+      "title": "Stardew Valley",
+      "asset": "stardew-valley.svg",
+      "currentSwiftUISymbol": "leaf"
+    },
+    {
+      "id": "terraria",
+      "title": "Terraria",
+      "asset": "terraria.svg",
+      "currentSwiftUISymbol": "tree"
+    },
+    {
+      "id": "minecraft-bedrock",
+      "title": "Minecraft Bedrock",
+      "asset": "minecraft-bedrock.svg",
+      "currentSwiftUISymbol": "cube.transparent"
+    },
+    {
+      "id": "theotown",
+      "title": "TheoTown",
+      "asset": "theotown.svg",
+      "currentSwiftUISymbol": "building.2"
+    },
+    {
+      "id": "worldbox",
+      "title": "WorldBox",
+      "asset": "worldbox.svg",
+      "currentSwiftUISymbol": "globe.americas"
+    }
+  ]
+}
