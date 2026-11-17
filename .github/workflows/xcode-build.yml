@@ -30,7 +30,7 @@ jobs:
       - name: Prepare app icon asset catalog
         run: |
           mkdir -p Assets.xcassets/AppIcon.appiconset
-          cp extracted/B05E2494-0B4F-4E4E-AE1F-314341A54E79/Resources/AppIcon.png Assets.xcassets/AppIcon.appiconset/AppIcon.png
+          cp Resources/AppIcon.png Assets.xcassets/AppIcon.appiconset/AppIcon.png
           cat > Assets.xcassets/AppIcon.appiconset/Contents.json <<'EOF'
           {
             "images": [
