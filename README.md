@@ -12,7 +12,7 @@ Status: Fallout Shelter Editor Ready — Additional game editors coming soon.
 
 # **Add the Source URL**
 ```
-https://raw.githubusercontent.com/infifunk/SAVEFORGE/main/apps.json
+https://infifunk.github.io/SAVEFORGE/apps.json
 ```
 
 ⸻
