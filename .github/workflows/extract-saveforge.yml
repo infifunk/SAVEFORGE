@@ -10,7 +10,7 @@ on:
       - ".github/workflows/extract-saveforge.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   extract:
@@ -36,6 +36,18 @@ jobs:
           echo "JSON files: $(find extracted -type f -iname '*.json' | wc -l)"
           echo "Project plists:"
           find extracted -type f \( -name 'Project.plist' -o -name 'Entitlements.plist' \) -print
+
+      - name: Commit extracted project to Test
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add extracted/
+          if git diff --cached --quiet; then
+            echo "No extracted project changes to commit."
+          else
+            git commit -m "Extract SAVEFORGE project archive"
+            git push origin HEAD:Test
+          fi
 
       - name: Upload extracted project
         uses: actions/upload-artifact@v4
