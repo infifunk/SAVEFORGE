@@ -4,7 +4,7 @@ import Foundation
 import UIKit
 
 enum MinecraftBedrockItemIcons {
-    static let source = "https://github.com/infifunk/SAVEFORGE/releases/latest/download/Items.zip"
+    static let source = "https://github.com/infifunk/SAVEFORGE/releases/download/assets-v1/Items.zip"
     private static let rawRoot = "https://raw.githubusercontent.com/Mojang/bedrock-samples/main/resource_pack/"
     private static let assetPackURL = URL(string: source)!
     static var cacheDirectory: URL {
@@ -174,7 +174,7 @@ enum MinecraftBedrockItemIcons {
         guard !safe.isEmpty, safe.range(of: "^[a-z0-9_/-]+$", options: .regularExpression) != nil,
               !safe.contains("..") else { DispatchQueue.main.async { completion(nil) }; return }
 
-        if let hosted = MinecraftReleaseItemAssets.cachedImage(for: safe) ?? bundledImage(for: safe) {
+        if let hosted = bundledImage(for: safe) {
             DispatchQueue.main.async { completion(hosted) }
             return
         }
@@ -200,7 +200,7 @@ enum MinecraftBedrockItemIcons {
             $0.lowercased().replacingOccurrences(of: "minecraft:", with: "")
         }.filter { !$0.isEmpty && $0 != "air" })
         let resolved = unique.reduce(into: 0) { count, identifier in
-            if MinecraftReleaseItemAssets.cachedImage(for: identifier) != nil || bundledImage(for: identifier) != nil { count += 1 }
+            if bundledImage(for: identifier) != nil { count += 1 }
         }
         return (resolved, unique.count)
     }
@@ -617,7 +617,7 @@ enum MinecraftBedrockItemIcons {
 
     static func cachedImage(for textureKey: String) -> UIImage? {
         let normalized = normalizedTextureKey(textureKey)
-        if let hosted = MinecraftReleaseItemAssets.cachedImage(for: normalized) { return hosted }
+        
         if let bundled = bundledImage(for: normalized) { return bundled }
         let safe = normalized.replacingOccurrences(of: "/", with: "_")
         return UIImage(contentsOfFile: cacheDirectory.appendingPathComponent(safe + ".png").path)
