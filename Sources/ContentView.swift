@@ -2717,16 +2717,26 @@ private struct MinecraftEditorSectionScreen: View {
             VStack(alignment: .leading, spacing: 8) {
                 let coverage = MinecraftBedrockItemIcons.bundledCoverage(for: catalogBrowser.items.map { $0.id })
                 HStack {
-                    Text("BUNDLED PNG ICONS")
+                    Text("MINECRAFT PNG ICON PACK")
                         .font(.system(size: 9, weight: .black, design: .monospaced)).foregroundStyle(SF.text)
                     Spacer()
-                    Text("\(coverage.resolved) / \(coverage.total) ICONS")
+                    Text("\\(coverage.resolved) / \\(coverage.total) ICONS")
                         .font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundStyle(gold)
                 }
-                Text(coverage.total == 0
-                     ? "Load the Bedrock catalog to check bundled icon coverage."
-                     : "\(coverage.resolved) catalog IDs resolve to bundled PNG images.")
+                Text("\\(coverage.resolved) / \\(coverage.total) catalog IDs currently resolve to PNG icons.")
                     .font(.system(size: 8, design: .monospaced)).foregroundStyle(SF.muted)
+                HStack(spacing: 8) {
+                    Text(catalogBrowser.iconPackStatus)
+                        .font(.system(size: 8, design: .monospaced)).foregroundStyle(SF.muted)
+                        .lineLimit(2)
+                    Spacer(minLength: 4)
+                    Button(catalogBrowser.isIconPackDownloading ? "DOWNLOADING…" : "DOWNLOAD / UPDATE") {
+                        catalogBrowser.downloadIconPack()
+                    }
+                    .font(.system(size: 8, weight: .black, design: .monospaced))
+                    .foregroundStyle(gold)
+                    .disabled(catalogBrowser.isIconPackDownloading)
+                }
             }.padding(12).background(SF.panel).clipShape(RoundedRectangle(cornerRadius: 12))
 
             if catalogBrowser.items.isEmpty {
@@ -3278,6 +3288,8 @@ private final class MinecraftCatalogBrowserModel: ObservableObject {
     @Published var selectedCategory = "All"
     @Published private(set) var isDownloading = false
     @Published private(set) var status = "Download catalogs to install the full Bedrock item list."
+    @Published private(set) var isIconPackDownloading = false
+    @Published private(set) var iconPackStatus = "Minecraft PNG pack not installed."
 
     let categories = ["All", "Tools", "Construction", "Nature", "Equipment", "Items"]
 
@@ -3328,6 +3340,25 @@ private final class MinecraftCatalogBrowserModel: ObservableObject {
                 self?.status = result
             }
         }
+    }
+
+    func downloadIconPack() {
+        guard !isIconPackDownloading else { return }
+        isIconPackDownloading = true
+        iconPackStatus = "Connecting to SAVEFORGE asset release…"
+        MinecraftReleaseItemAssets.download(progress: { [weak self] message in
+            DispatchQueue.main.async { self?.iconPackStatus = message }
+        }, completion: { [weak self] result in
+            DispatchQueue.main.async {
+                self?.isIconPackDownloading = false
+                switch result {
+                case .success(let count):
+                    self?.iconPackStatus = "Installed \\(count) Minecraft PNG icons · ready offline"
+                case .failure(let error):
+                    self?.iconPackStatus = "Icon pack failed: \\(error.localizedDescription)"
+                }
+            }
+        })
     }
 
     private static func isEducationItem(_ identifier: String) -> Bool {
