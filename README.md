@@ -76,28 +76,64 @@ SAVEFORGE uses the Cyber Forge visual identity:
 
 # **Project Structure**
 
-The project includes:
+The repository is organized into the following main directories and files:
 
 ```
 SAVEFORGE/
-├── SAVEFORGEApp.swift
-├── README.md
+├── .github/
+│   └── workflows/
+│       └── xcode-build.yml
+├── Assets.xcassets/
+│   └── AppIcon.appiconset/
+│       ├── AppIcon.png
+│       └── Contents.json
+├── Resources/
+│   ├── AppIcon.png
+│   ├── manifest.json
+│   ├── fallout-shelter.json
+│   ├── fallout-shelter.svg
+│   ├── minecraft-bedrock.json
+│   ├── minecraft-bedrock.svg
+│   ├── minecraft-bedrock-item-icons.json
+│   ├── stardew-valley.json
+│   ├── stardew-valley.svg
+│   ├── terraria.json
+│   ├── terraria.svg
+│   ├── theotown.json
+│   ├── theotown.svg
+│   ├── worldbox.json
+│   └── worldbox.svg
+├── Sources/
+│   ├── SAVEFORGEApp.swift
+│   ├── ContentView.swift
+│   ├── MinecraftBedrockIconDatabase.swift
+│   ├── MinecraftBedrockItemIcons.swift
+│   ├── MinecraftBedrockLevelDBInspector.swift
+│   ├── MinecraftBedrockLevelDBTableReader.swift
+│   ├── MinecraftBedrockLevelDBWriter.swift
+│   ├── MinecraftBedrockLevelDatEngine.swift
+│   ├── MinecraftPlayerEditService.swift
+│   └── MinecraftPlayerSnapshot.swift
+├── apps.json
+├── index.html
+├── project.yml
 ├── LICENSE
-├── ContentView.swift
-├── Config/
-│   ├── Project.plist
-│   └── Entitlements.plist
-└── Resources/
-    ├── AppIcon.png
-    ├── manifest.json
-    ├── fallout-shelter.svg
-    ├── stardew-valley.svg
-    ├── terraria.svg
-    ├── minecraft-bedrock.svg
-    ├── theotown.svg
-    ├── worldbox.svg
-    └── Game JSON files
+├── LICENSE.md
+└── README.md
 ```
+
+### **Directory and File Overview**
+
+* **Sources/** — Swift application source code, including the main SwiftUI interface and dedicated Minecraft Bedrock save, inventory, player, LevelDB, and icon services.
+* **Resources/** — Bundled game metadata, library manifests, game artwork, and JSON configuration files used by the app.
+* **Assets.xcassets/** — Xcode asset catalog, including the application icon.
+* **.github/workflows/** — GitHub Actions workflow used to generate the Xcode project, build the iOS app, archive it, and package the IPA.
+* **project.yml** — XcodeGen project configuration, including build settings, source paths, resources, and platform target.
+* **apps.json** — App listing and source information used by the project website.
+* **index.html** — GitHub Pages website.
+* **LICENSE / LICENSE.md** — Project license information.
+
+The downloadable Minecraft PNG icon pack is hosted separately in the project's GitHub Releases and is downloaded by the app when requested. It is not bundled as thousands of individual PNG files in the repository.
 
 # **Development**
 
@@ -107,8 +143,10 @@ SAVEFORGE is developed using:
 * SwiftUI
 * UIKit
 * Native iOS frameworks
+* XcodeGen for generating the Xcode project
+* GitHub Actions for automated iOS builds and IPA packaging
 
-The project is developed and built using a rebuilt version of Nyxian IDE, by myslef, for refined mobile editing.
+The repository is the source of truth for development. GitHub Actions builds the iOS app from the project configuration and source files.
 
 # **Roadmap**
 
