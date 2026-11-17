@@ -31,8 +31,6 @@ targets:
       - path: Sources
       - path: Assets.xcassets
     resources:
-      - path: Resources/Minecraft
-        type: folder
       - path: Resources/*.json
       - path: Resources/*.svg
     settings:
