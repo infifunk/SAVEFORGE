@@ -28,12 +28,15 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: Sources
+      - path: extracted/B05E2494-0B4F-4E4E-AE1F-314341A54E79
+        excludes:
+          - Config/**
+          - Resources/**
     resources:
-      - path: Resources/Minecraft
+      - path: extracted/B05E2494-0B4F-4E4E-AE1F-314341A54E79/Resources/Minecraft
         type: folder
-      - path: Resources/*.json
-      - path: Resources/*.svg
+      - path: extracted/B05E2494-0B4F-4E4E-AE1F-314341A54E79/Resources/*.json
+      - path: extracted/B05E2494-0B4F-4E4E-AE1F-314341A54E79/Resources/*.svg
       - path: Assets.xcassets
     settings:
       base:
