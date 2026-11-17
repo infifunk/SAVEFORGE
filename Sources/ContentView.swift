@@ -6,6 +6,7 @@ import UIKit
 import AVKit
 import WebKit
 import Compression
+import zlib
 
 let appName = "SAVEFORGE"
 let version = "1.0.5"
@@ -4111,26 +4112,36 @@ enum MinecraftZipExtractor {
     private static func inflate(_ input: Data, expectedSize: Int) throws -> Data {
         guard expectedSize >= 0 else { throw zipError("Invalid uncompressed file size.") }
         if expectedSize == 0 { return Data() }
+        guard input.count <= Int(uInt.max), expectedSize <= Int(uInt.max) else {
+            throw zipError("This ZIP entry is too large to decompress.")
+        }
+
         var output = Data(count: expectedSize)
-        let decoded = output.withUnsafeMutableBytes { outBuffer in
-            input.withUnsafeBytes { inBuffer in
-                guard let out = outBuffer.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                      let inputBytes = inBuffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return 0 }
-                return compression_decode_buffer(
-                    out, expectedSize,
-                    inputBytes, input.count,
-                    nil,
-                    COMPRESSION_ZLIB
-                )
+        var stream = z_stream()
+        let initStatus = inflateInit2_(&stream, -MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
+        guard initStatus == Z_OK else {
+            throw zipError("Could not initialize the ZIP DEFLATE decoder.")
+        }
+        defer { inflateEnd(&stream) }
+
+        let status: Int32 = output.withUnsafeMutableBytes { outputBuffer in
+            input.withUnsafeBytes { inputBuffer in
+                guard let outputBase = outputBuffer.baseAddress,
+                      let inputBase = inputBuffer.baseAddress else { return Z_STREAM_ERROR }
+                stream.next_in = UnsafeMutablePointer<Bytef>(mutating: inputBase.assumingMemoryBound(to: Bytef.self))
+                stream.avail_in = uInt(input.count)
+                stream.next_out = outputBase.assumingMemoryBound(to: Bytef.self)
+                stream.avail_out = uInt(expectedSize)
+                return zlib.inflate(&stream, Z_FINISH)
             }
         }
-        guard decoded == expectedSize else {
-            throw zipError("This ZIP's DEFLATE stream couldn't be decoded. Try exporting the world as an uncompressed ZIP or .mcworld file.")
+        guard status == Z_STREAM_END, Int(stream.total_out) == expectedSize else {
+            throw zipError("The ZIP's DEFLATE data is invalid or incomplete. The archive may be damaged or use an unsupported ZIP format.")
         }
         return output
     }
 
-    private static func findEOCD(in data: Data) -> Int? {
+private static func findEOCD(in data: Data) -> Int? {
         let lower = max(0, data.count - 65_557)
         if data.count < 22 { return nil }
         for offset in stride(from: data.count - 22, through: lower, by: -1) {
