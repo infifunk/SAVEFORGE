@@ -4,12 +4,134 @@ import Foundation
 import UIKit
 
 enum MinecraftBedrockItemIcons {
-    static let source = "https://github.com/Mojang/bedrock-samples"
+    static let source = "https://github.com/infifunk/SAVEFORGE/releases/latest/download/Items.zip"
     private static let rawRoot = "https://raw.githubusercontent.com/Mojang/bedrock-samples/main/resource_pack/"
+    private static let assetPackURL = URL(string: source)!
     static var cacheDirectory: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("SAVEFORGE", isDirectory: true)
             .appendingPathComponent("MinecraftIconPack", isDirectory: true)
+    }
+    static var assetPackDirectory: URL {
+        cacheDirectory.appendingPathComponent("Items", isDirectory: true)
+    }
+    private static var assetMappingURL: URL {
+        assetPackDirectory.appendingPathComponent("item_texture_mapping.json")
+    }
+    private(set) static var assetPackIsDownloading = false
+    private(set) static var assetPackStatus = "Download the complete Minecraft PNG pack for offline inventory icons."
+
+    static var isAssetPackInstalled: Bool {
+        guard let data = try? Data(contentsOf: assetMappingURL),
+              let mapping = try? JSONDecoder().decode([String: [String]].self, from: data),
+              !mapping.isEmpty else { return false }
+        let files = (try? FileManager.default.contentsOfDirectory(at: assetPackDirectory, includingPropertiesForKeys: nil)) ?? []
+        return files.filter { $0.pathExtension.lowercased() == "png" }.count > 0
+    }
+
+    static func downloadAssetPack(completion: @escaping (Bool, String) -> Void) {
+        guard !assetPackIsDownloading else { return }
+        assetPackIsDownloading = true
+        assetPackStatus = "Downloading Items.zip from GitHub Releases…"
+
+        URLSession.shared.downloadTask(with: assetPackURL) { temporaryURL, response, error in
+            guard error == nil, let temporaryURL,
+                  (response as? HTTPURLResponse)?.statusCode == 200 else {
+                let message = error?.localizedDescription ?? "GitHub did not return Items.zip. Confirm the release is published and the asset is named Items.zip."
+                DispatchQueue.main.async {
+                    assetPackIsDownloading = false
+                    assetPackStatus = "DOWNLOAD FAILED · " + message
+                    completion(false, message)
+                }
+                return
+            }
+
+            let stagingRoot = cacheDirectory.appendingPathComponent("Items-Staging-" + UUID().uuidString, isDirectory: true)
+            let backupDirectory = cacheDirectory.appendingPathComponent("Items-Previous", isDirectory: true)
+
+            do {
+                try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+                try FileManager.default.createDirectory(at: stagingRoot, withIntermediateDirectories: true)
+                try MinecraftZipExtractor.extract(temporaryURL, to: stagingRoot)
+
+                let stagedItems = stagingRoot.appendingPathComponent("Items", isDirectory: true)
+                let stagedMapping = stagedItems.appendingPathComponent("item_texture_mapping.json")
+                guard let mappingData = try? Data(contentsOf: stagedMapping),
+                      let mapping = try? JSONDecoder().decode([String: [String]].self, from: mappingData),
+                      !mapping.isEmpty else {
+                    throw NSError(domain: "SAVEFORGE.MinecraftIcons", code: 1,
+                                  userInfo: [NSLocalizedDescriptionKey: "Items.zip did not contain a valid Items/item_texture_mapping.json file."])
+                }
+
+                let stagedFiles = try FileManager.default.contentsOfDirectory(at: stagedItems, includingPropertiesForKeys: nil)
+                let pngCount = stagedFiles.filter { $0.pathExtension.lowercased() == "png" }.count
+                guard pngCount > 0 else {
+                    throw NSError(domain: "SAVEFORGE.MinecraftIcons", code: 2,
+                                  userInfo: [NSLocalizedDescriptionKey: "The downloaded pack contained no PNG images."])
+                }
+
+                if FileManager.default.fileExists(atPath: backupDirectory.path) {
+                    try FileManager.default.removeItem(at: backupDirectory)
+                }
+                if FileManager.default.fileExists(atPath: assetPackDirectory.path) {
+                    try FileManager.default.moveItem(at: assetPackDirectory, to: backupDirectory)
+                }
+
+                do {
+                    try FileManager.default.moveItem(at: stagedItems, to: assetPackDirectory)
+                    if FileManager.default.fileExists(atPath: backupDirectory.path) {
+                        try FileManager.default.removeItem(at: backupDirectory)
+                    }
+                } catch {
+                    if !FileManager.default.fileExists(atPath: assetPackDirectory.path),
+                       FileManager.default.fileExists(atPath: backupDirectory.path) {
+                        try? FileManager.default.moveItem(at: backupDirectory, to: assetPackDirectory)
+                    }
+                    throw error
+                }
+
+                try? FileManager.default.removeItem(at: stagingRoot)
+                resetArchiveCaches()
+                let message = "Installed \(pngCount.formatted()) Minecraft PNG icons and \(mapping.count.formatted()) texture mappings."
+                DispatchQueue.main.async {
+                    assetPackIsDownloading = false
+                    assetPackStatus = "READY OFFLINE · \(pngCount) PNG ICONS"
+                    completion(true, message)
+                }
+            } catch {
+                try? FileManager.default.removeItem(at: stagingRoot)
+                let message = error.localizedDescription
+                DispatchQueue.main.async {
+                    assetPackIsDownloading = false
+                    assetPackStatus = "DOWNLOAD FAILED · " + message
+                    completion(false, message)
+                }
+            }
+        }.resume()
+    }
+
+    private static let archiveAtlasLock = NSLock()
+    private static var archiveAtlasStorage: [String: [String]]?
+    private static var archiveAtlas: [String: [String]] {
+        archiveAtlasLock.lock()
+        defer { archiveAtlasLock.unlock() }
+        if let archiveAtlasStorage { return archiveAtlasStorage }
+        let decoded: [String: [String]]
+        if let data = try? Data(contentsOf: assetMappingURL),
+           let value = try? JSONDecoder().decode([String: [String]].self, from: data) {
+            decoded = value
+        } else {
+            decoded = [:]
+        }
+        archiveAtlasStorage = decoded
+        return decoded
+    }
+
+    private static func resetArchiveCaches() {
+        archiveAtlasLock.lock()
+        archiveAtlasStorage = nil
+        archiveAtlasLock.unlock()
+        bundledImageCache.removeAllObjects()
     }
 
     private static let migrationLock = NSLock()
@@ -148,7 +270,7 @@ enum MinecraftBedrockItemIcons {
             if suffix == "stairs" { aliases.append("stairs_" + wood) }
             if suffix == "slab" { aliases.append("slab_" + wood) }
         }
-        return aliases.compactMap { bundledAtlas[$0] }.flatMap { $0 }
+        return aliases.compactMap { archiveAtlas[$0] ?? bundledAtlas[$0] }.flatMap { $0 }
     }
 
     private static let bundledAtlas: [String: [String]] = {
@@ -166,12 +288,25 @@ enum MinecraftBedrockItemIcons {
     }
 
     private static func bundledImage(for key: String) -> UIImage? {
-        for filename in bundledFilenames(for: key) {
+        let normalized = normalizedTextureKey(key)
+        let directName = normalized.replacingOccurrences(of: "/", with: "_") + ".png"
+        let directURL = assetPackDirectory.appendingPathComponent(directName)
+        if let image = UIImage(contentsOfFile: directURL.path) { return image }
+
+        for filename in bundledFilenames(for: normalized) {
             let cacheKey = filename as NSString
             if let cached = bundledImageCache.object(forKey: cacheKey) { return cached }
             let name = URL(fileURLWithPath: filename).deletingPathExtension().lastPathComponent
-            guard let url = bundledResourceURL(forResource: name, withExtension: "png"),
-                  let image = UIImage(contentsOfFile: url.path) else { continue }
+            let archiveURL = assetPackDirectory.appendingPathComponent(name + ".png")
+            let image: UIImage?
+            if FileManager.default.fileExists(atPath: archiveURL.path) {
+                image = UIImage(contentsOfFile: archiveURL.path)
+            } else if let bundledURL = bundledResourceURL(forResource: name, withExtension: "png") {
+                image = UIImage(contentsOfFile: bundledURL.path)
+            } else {
+                image = nil
+            }
+            guard let image else { continue }
             bundledImageCache.setObject(image, forKey: cacheKey)
             return image
         }
@@ -473,10 +608,11 @@ enum MinecraftBedrockItemIcons {
 
     static var installedPNGCount: Int {
         migrateLegacyPNGsIfNeeded()
-        let urls = (try? FileManager.default.contentsOfDirectory(
-            at: cacheDirectory, includingPropertiesForKeys: nil
-        )) ?? []
-        return Set(urls.filter { $0.pathExtension.lowercased() == "png" }.map { $0.lastPathComponent }).count
+        let cached = (try? FileManager.default.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil)) ?? []
+        let archive = (try? FileManager.default.contentsOfDirectory(at: assetPackDirectory, includingPropertiesForKeys: nil)) ?? []
+        let names = cached.filter { $0.pathExtension.lowercased() == "png" }.map { $0.lastPathComponent }
+            + archive.filter { $0.pathExtension.lowercased() == "png" }.map { $0.lastPathComponent }
+        return Set(names).count
     }
 
     static func cachedImage(for textureKey: String) -> UIImage? {
