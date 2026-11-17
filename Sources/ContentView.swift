@@ -3289,7 +3289,7 @@ private final class MinecraftCatalogBrowserModel: ObservableObject {
     @Published private(set) var isDownloading = false
     @Published private(set) var status = "Download catalogs to install the full Bedrock item list."
     @Published private(set) var isIconPackDownloading = false
-    @Published private(set) var iconPackStatus = "Minecraft PNG pack not installed."
+    @Published private(set) var iconPackStatus = MinecraftBedrockItemIcons.isAssetPackInstalled ? "READY OFFLINE · ICON PACK INSTALLED" : "Minecraft PNG pack not installed."
 
     let categories = ["All", "Tools", "Construction", "Nature", "Equipment", "Items"]
 
@@ -3346,19 +3346,12 @@ private final class MinecraftCatalogBrowserModel: ObservableObject {
         guard !isIconPackDownloading else { return }
         isIconPackDownloading = true
         iconPackStatus = "Connecting to SAVEFORGE asset release…"
-        MinecraftReleaseItemAssets.download(progress: { [weak self] message in
-            DispatchQueue.main.async { self?.iconPackStatus = message }
-        }, completion: { [weak self] result in
+        MinecraftBedrockItemIcons.downloadAssetPack { [weak self] success, message in
             DispatchQueue.main.async {
                 self?.isIconPackDownloading = false
-                switch result {
-                case .success(let count):
-                    self?.iconPackStatus = "Installed \(count) Minecraft PNG icons · ready offline"
-                case .failure(let error):
-                    self?.iconPackStatus = "Icon pack failed: \(error.localizedDescription)"
-                }
+                self?.iconPackStatus = success ? message : "Icon pack failed: \(message)"
             }
-        })
+        }
     }
 
     private static func isEducationItem(_ identifier: String) -> Bool {
