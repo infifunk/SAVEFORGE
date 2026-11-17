@@ -1,0 +1,40 @@
+name: Organize SAVEFORGE Repository
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  organize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cleanup branch
+        uses: actions/checkout@v4
+        with:
+          ref: repo-cleanup
+
+      - name: Move source and resources into standard folders
+        run: |
+          set -euo pipefail
+          ROOT="extracted/B05E2494-0B4F-4E4E-AE1F-314341A54E79"
+          mkdir -p Sources Resources
+          git mv "$ROOT"/*.swift Sources/
+          git mv "$ROOT"/Resources/* Resources/
+          git rm -r "$ROOT"/Config
+          rmdir "$ROOT" || true
+          rmdir extracted || true
+          git rm SAVEFORGE.zip
+          git rm .github/workflows/extract-saveforge.yml
+          echo "Swift source files:"
+          find Sources -maxdepth 1 -type f -name '*.swift' -print
+          echo "Resource files: $(find Resources -type f | wc -l)"
+
+      - name: Commit organized repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Organize Swift sources and resources; remove archive"
+          git push origin HEAD:repo-cleanup
