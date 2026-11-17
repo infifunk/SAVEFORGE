@@ -174,8 +174,8 @@ enum MinecraftBedrockItemIcons {
         guard !safe.isEmpty, safe.range(of: "^[a-z0-9_/-]+$", options: .regularExpression) != nil,
               !safe.contains("..") else { DispatchQueue.main.async { completion(nil) }; return }
 
-        if let bundled = bundledImage(for: safe) {
-            DispatchQueue.main.async { completion(bundled) }
+        if let hosted = MinecraftReleaseItemAssets.cachedImage(for: safe) ?? bundledImage(for: safe) {
+            DispatchQueue.main.async { completion(hosted) }
             return
         }
 
@@ -200,7 +200,7 @@ enum MinecraftBedrockItemIcons {
             $0.lowercased().replacingOccurrences(of: "minecraft:", with: "")
         }.filter { !$0.isEmpty && $0 != "air" })
         let resolved = unique.reduce(into: 0) { count, identifier in
-            if bundledImage(for: identifier) != nil { count += 1 }
+            if MinecraftReleaseItemAssets.cachedImage(for: identifier) != nil || bundledImage(for: identifier) != nil { count += 1 }
         }
         return (resolved, unique.count)
     }
@@ -617,6 +617,7 @@ enum MinecraftBedrockItemIcons {
 
     static func cachedImage(for textureKey: String) -> UIImage? {
         let normalized = normalizedTextureKey(textureKey)
+        if let hosted = MinecraftReleaseItemAssets.cachedImage(for: normalized) { return hosted }
         if let bundled = bundledImage(for: normalized) { return bundled }
         let safe = normalized.replacingOccurrences(of: "/", with: "_")
         return UIImage(contentsOfFile: cacheDirectory.appendingPathComponent(safe + ".png").path)
