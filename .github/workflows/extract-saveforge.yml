@@ -1,0 +1,46 @@
+name: Extract SAVEFORGE Archive
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - Test
+    paths:
+      - "SAVEFORGE.zip"
+      - ".github/workflows/extract-saveforge.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Test branch
+        uses: actions/checkout@v4
+        with:
+          ref: Test
+
+      - name: Verify archive
+        run: |
+          test -s SAVEFORGE.zip
+          unzip -t SAVEFORGE.zip
+
+      - name: Extract complete project
+        run: |
+          mkdir -p extracted
+          unzip -q SAVEFORGE.zip -d extracted
+          echo "Files extracted: $(find extracted -type f | wc -l)"
+          echo "Swift files: $(find extracted -type f -name '*.swift' | wc -l)"
+          echo "PNG assets: $(find extracted -type f -iname '*.png' | wc -l)"
+          echo "JSON files: $(find extracted -type f -iname '*.json' | wc -l)"
+          echo "Project plists:"
+          find extracted -type f \( -name 'Project.plist' -o -name 'Entitlements.plist' \) -print
+
+      - name: Upload extracted project
+        uses: actions/upload-artifact@v4
+        with:
+          name: SAVEFORGE-Extracted-Project
+          path: extracted/
+          if-no-files-found: error
+          retention-days: 14
