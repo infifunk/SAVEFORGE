@@ -4040,7 +4040,7 @@ private enum MinecraftWorldImportStore {
     }
 }
 
-private enum MinecraftZipExtractor {
+enum MinecraftZipExtractor {
     static func extract(_ archiveURL: URL, to destination: URL) throws {
         let data = try Data(contentsOf: archiveURL, options: .mappedIfSafe)
         guard data.count >= 22 else { throw zipError("This ZIP archive is too small or invalid.") }
